@@ -75,3 +75,5 @@ class rugby_spider (scrapy.Spider) :
                 pass
             elif title = "Timeline":
                 pass
+            elif re.search("^[a-zA-Z]+ stats$") :
+                pass  
