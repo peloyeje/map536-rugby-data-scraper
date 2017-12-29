@@ -35,11 +35,11 @@ class rugby_spider (scrapy.Spider) :
                 match_link = menu.css(MATCH_LINK_SELECTOR).extract_first()
                 yield response.follow(match_link, callback = self.match_page_parse)
 
-        #selecting next list page to parse
-        NEXT_PAGE_SELECTOR = "#scrumArticlesBoxContent table:nth-child(3) tr td:nth-child(2) span:last-child a::attr(href)"
-        next_page_link = response.css(NEXT_PAGE_SELECTOR).extract_first()
-        yield {"page" : response.url}
-        yield response.follow(next_page_link, callback = self.match_list_parse)
+        ##selecting next list page to parse
+        #NEXT_PAGE_SELECTOR = "#scrumArticlesBoxContent table:nth-child(3) tr td:nth-child(2) span:last-child a::attr(href)"
+        #next_page_link = response.css(NEXT_PAGE_SELECTOR).extract_first()
+        #yield {"page" : response.url}
+        #yield response.follow(next_page_link, callback = self.match_list_parse)
 
 
     def player_page_parse(self, response):
@@ -55,6 +55,23 @@ class rugby_spider (scrapy.Spider) :
         - match data format : {...}
         - player statistics format : {...}
         - team statistics format : {...}
+        this parser calls multiple other parser to deal with each situation
         """
 
-        pass
+        IFRAME_LINK_SELECTOR = "#win_old::attr(src)"
+        iframe_link = response.css(IFRAME_LINK_SELECTOR).extract_first()
+        yield response.follow(iframe_link, callback = self._match_iframe_parse)
+
+
+    def _match_iframe_parse(self, response):
+        """parser for the internal iframe of each match page"""
+
+        INFO_SELECTOR = "#scrumContent .tabbertab"
+        for info in response.css(INFO_SELECTOR):
+            title = info.css("h2::text").extract_first()
+            if title = "Teams" :
+                pass
+            elif title = "Match stats":
+                pass
+            elif title = "Timeline":
+                pass
