@@ -30,15 +30,16 @@ class rugby_spider (scrapy.Spider) :
         for menu in response.css(MENU_SELECTOR):
             menu_id = menu.css("div::attr(id)").extract_first()
             if re.search("^engine-dd[0-9]+$", menu_id) :
-
                 #selecting the match description link in the page
                 MATCH_LINK_SELECTOR = "ul li:nth-child(6) a::attr(href)"
                 match_link = menu.css(MATCH_LINK_SELECTOR).extract_first()
                 yield response.follow(match_link, callback = self.match_page_parse)
 
-
-
-
+        #selecting next list page to parse
+        NEXT_PAGE_SELECTOR = "#scrumArticlesBoxContent table:nth-child(3) tr td:nth-child(2) span:last-child a::attr(href)"
+        next_page_link = response.css(NEXT_PAGE_SELECTOR).extract_first()
+        yield {"page" : response.url}
+        yield response.follow(next_page_link, callback = self.match_list_parse)
 
 
     def player_page_parse(self, response):
@@ -56,4 +57,4 @@ class rugby_spider (scrapy.Spider) :
         - team statistics format : {...}
         """
 
-        pass 
+        pass
