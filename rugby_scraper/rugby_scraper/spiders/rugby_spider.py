@@ -174,7 +174,6 @@ class rugby_spider (scrapy.Spider) :
                     assert len(player_id_re.groups()) == 1 , "found more than one player id in url"
                     player_id = player_id_re.group(1)
                     away_team_player_dic[player_id] = (player_name, player_position, player_number)
-                yield{"home" : home_team_player_dic}
 
 
 
