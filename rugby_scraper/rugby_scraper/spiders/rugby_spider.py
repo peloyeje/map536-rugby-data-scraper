@@ -52,9 +52,11 @@ class rugby_spider (scrapy.Spider) :
 
     def match_page_parse(self, response):
         """match page parser that gets all the info on the match itself, each teams statistics, each players statistcs.
+        - scoring data in the format {"match" : match_id, "team": team_id, "tries" : [player_1_id, player_2_id, ...], "cons" : [player_1_id, ...], "pen" : [palyer_1_id, ...]}
         - match data format : {...}
         - player statistics format : {...}
         - team statistics format : {...}
+        - match events in format : {...}
         this parser calls multiple other parser to deal with each situation
         """
 
@@ -65,15 +67,21 @@ class rugby_spider (scrapy.Spider) :
 
     def _match_iframe_parse(self, response):
         """parser for the internal iframe of each match page"""
-
+        #getting match id
+        match_id_re = re.search("^http://stats.espnscrum.com/statsguru/rugby/current/match/(\d+).html", response.url)
+        assert len(match_id_re.groups()) == 1, 'match id detection failed'
+        match_id = int(match_id_re.group(1))
+        assert type(match_id) is IntType , "match id is not an integer"
+        yield {"match id" : match_id}
+        #getting the info on the match
         INFO_SELECTOR = "#scrumContent .tabbertab"
         for info in response.css(INFO_SELECTOR):
             title = info.css("h2::text").extract_first()
-            if title = "Teams" :
+            if title == "Teams" :
                 pass
-            elif title = "Match stats":
+            elif title == "Match stats":
                 pass
-            elif title = "Timeline":
+            elif title == "Timeline":
                 pass
-            elif re.search("^[a-zA-Z]+ stats$") :
-                pass  
+            elif re.search("^[a-zA-Z]+ stats$", title) :
+                pass
