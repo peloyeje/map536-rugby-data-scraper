@@ -71,14 +71,76 @@ class rugby_spider (scrapy.Spider) :
         match_id_re = re.search("^http://stats.espnscrum.com/statsguru/rugby/current/match/(\d+).html", response.url)
         assert len(match_id_re.groups()) == 1, 'match id detection failed'
         match_id = int(match_id_re.group(1))
-        assert type(match_id) is IntType , "match id is not an integer"
-        yield {"match id" : match_id}
+        assert type(match_id) is int , "match id is not an integer"
+
         #getting the info on the match
         INFO_SELECTOR = "#scrumContent .tabbertab"
         for info in response.css(INFO_SELECTOR):
             title = info.css("h2::text").extract_first()
-            if title == "Teams" :
-                pass
+            if title == "Teams":
+
+                #getting the players lists in format {player_id :(player_name, player_position, player_number), ...}
+                #home team
+                HOME_PLAYER_ROW = "table tr td:nth-child(1) div table tr"
+                #if the team tables are present we proceed
+                if not info.css(HOME_PLAYER_ROW):
+                    #if the home team tables are not present we skip to the next information source in the page
+                    continue
+
+                players_row = info.css(HOME_PLAYER_ROW)
+                PLAYER_NUMBER_SELECTOR = "td:nth-child(1)::text"
+                PLAYER_POS_SELECTOR = "td:nth-child(2)::text"
+                PLAYER_NAME_SELECTOR = "td:nth-child(3) table a::text"
+                PLAYER_URL_SELECTOR = "td:nth-child(3) table a::attr(href)"
+                home_team_player_dic = {}
+                for player_row in players_row:
+                    player_number = player_row.css(PLAYER_NUMBER_SELECTOR).extract_first()
+                    player_position = player_row.css(PLAYER_POS_SELECTOR).extract_first()
+                    player_name = player_row.css(PLAYER_NAME_SELECTOR).extract_first()
+                    if not player_row.css(PLAYER_URL_SELECTOR).extract_first() :
+                        #if player url not found, we skip to next player
+                        continue
+                    player_url = player_row.css(PLAYER_URL_SELECTOR).extract_first()
+                    #INSERT PLAYER PAGE SCRAPING LINK
+                    player_id_re = re.search("^[\D\-_.:]+/(\d+).html$", player_url)
+
+                    #checking that we are selecting a valid player row
+                    if not player_id_re :
+                        #if player has no id in url, we skip to next player
+                        continue
+                    assert len(player_id_re.groups()) == 1 , "found more than one player id in url"
+                    player_id = player_id_re.group(1)
+                    home_team_player_dic[player_id] = (player_name, player_position, player_number)
+
+                #away team
+                AWAY_PLAYER_ROW = "table tr td:nth-child(2) div table tr"
+                #if the team tables are present we proceed
+                if not info.css(AWAY_PLAYER_ROW):
+                    #if the away team tables are not present we skip to the next information source in the page
+                    continue
+                players_row = info.css(AWAY_PLAYER_ROW)
+                away_team_player_dic = {}
+                for player_row in players_row:
+                    player_number = player_row.css(PLAYER_NUMBER_SELECTOR).extract_first()
+                    player_position = player_row.css(PLAYER_POS_SELECTOR).extract_first()
+                    player_name = player_row.css(PLAYER_NAME_SELECTOR).extract_first()
+                    if not player_row.css(PLAYER_URL_SELECTOR).extract_first() :
+                        #if player url not found, we skip to next player
+                        continue
+                    player_url = player_row.css(PLAYER_URL_SELECTOR).extract_first()
+                    #INSERT PLAYER PAGE SCRAPING LINK
+                    player_id_re = re.search("^[\D\-_.:]+/(\d+).html$", player_url)
+
+                    #checking that we are selecting a valid player row
+                    if not player_id_re :
+                        #if player has no id in url, we skip to next player
+                        continue
+                    assert len(player_id_re.groups()) == 1 , "found more than one player id in url"
+                    player_id = player_id_re.group(1)
+                    away_team_player_dic[player_id] = (player_name, player_position, player_number)
+                yield {"home" : home_team_player_dic, "away" : away_team_player_dic}
+
+
             elif title == "Match stats":
                 pass
             elif title == "Timeline":
