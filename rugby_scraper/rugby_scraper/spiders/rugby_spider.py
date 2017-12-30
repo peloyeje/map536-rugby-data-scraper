@@ -65,6 +65,42 @@ class rugby_spider (scrapy.Spider) :
         yield response.follow(iframe_link, callback = self._match_iframe_parse)
 
 
+    def _get_player_id_from_name(name, team_dic) :
+        """method that allows to get the id of a player from his name and the dic of his team
+        should accept names as : name, initials name"""
+        potential = []
+        final = []
+        name = name.upper()
+        for player_id , player_info in team_dic.items() :
+            player_name = player_info[0].upper()
+            player_name_list = player_name.split(" ")
+            researched_name_list = name.split(" ")
+            for part_of_name in researched_name_list :
+                if part_of_name in player_name_list :
+                    potential.append(player_id)
+        if len(potential) == 0 :
+            raise RuntimeError ("no name was detected")
+        elif len(potential) == 1 :
+            return potential[0]
+        else:
+            if len(name.split(" ")) == 1 :
+                raise RuntimeError("two many names containing the exact researched name")
+            else:
+                researched_first_leter = name.split(" ")[0][0]
+                researched_last_name = name.split(" ")[-1]
+                for potential_id in potential :
+                    potential_name = team_dic[potential_id][0].upper()
+                    potential_first_letter = potential_name.split(" ")[0][0]
+                    potential_last_name = potential_name.split(" ")[-1]
+                    if potential_first_letter == researched_first_leter and potential_last_name == researched_last_name:
+                        final.append(potential_id)
+                if len(final) == 1:
+                    return final[0]
+                else:
+                    raise RuntimeError ("could not find name")
+
+
+
     def _match_iframe_parse(self, response):
         """parser for the internal iframe of each match page"""
         #getting match id
@@ -138,7 +174,8 @@ class rugby_spider (scrapy.Spider) :
                     assert len(player_id_re.groups()) == 1 , "found more than one player id in url"
                     player_id = player_id_re.group(1)
                     away_team_player_dic[player_id] = (player_name, player_position, player_number)
-                yield {"home" : home_team_player_dic, "away" : away_team_player_dic}
+                yield{"home" : home_team_player_dic}
+
 
 
             elif title == "Match stats":
