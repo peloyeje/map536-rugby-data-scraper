@@ -53,7 +53,7 @@ class rugby_spider (scrapy.Spider) :
 
     def match_page_parse(self, response):
         """match page parser that gets all the info on the match itself, each teams statistics, each players statistcs.
-        - scoring data in the format {"match" : match_id, "team": team_id, "tries" : [player_1_id, player_2_id, ...], "cons" : [player_1_id, ...], "pen" : [palyer_1_id, ...]}
+        - scoring data in the format {"match" : match_id, "team": team_id, "tries" : [player_1_id, player_2_id, ...], "cons" : [player_1_id, ...], "pen" : [palyer_1_id, ...], "drops" : [player_1_id, ...]}
         - match data format : {...}
         - player statistics format : {...}
         - team statistics format : {...}
@@ -168,7 +168,7 @@ class rugby_spider (scrapy.Spider) :
             player_id = player_id_re.group(1)
             away_team_player_dic[player_id] = (player_name, player_position, player_number)
 
-            return (home_team_player_dic, away_team_player_dic)
+        return (home_team_player_dic, away_team_player_dic)
 
     def _match_iframe_parse(self, response):
         """parser for the internal iframe of each match page"""
@@ -178,10 +178,12 @@ class rugby_spider (scrapy.Spider) :
         match_id = int(match_id_re.group(1))
         assert type(match_id) is int , "match id is not an integer"
 
+        #TO BE REPLACED
         home_team_id = "FAKE HOME TEAM ID"
         away_team_id = "FAKE AWAY TEAM ID"
 
-        home_team_score_data = {"match" : match_id, "team_id" : home_team_id, "tries" : [], "cons" : [], "pen" : []}
+        home_team_score_data = {"match" : match_id, "team_id" : home_team_id, "tries" : [], "cons" : [], "pens" : [], "drops" : []}
+        away_team_score_data = {"match" : match_id, "team_id" : away_team_id, "tries" : [], "cons" : [], "pens" : [], "drops" : []}
 
         #getting the info on the match
         INFO_SELECTOR = "#scrumContent .tabbertab"
@@ -195,6 +197,7 @@ class rugby_spider (scrapy.Spider) :
                 if not get_teams_result:
                     continue
                 home_team_player_dic , away_team_player_dic = get_teams_result
+
                 #getting the score and event data
                 #home team
                 HOME_EVENT_ROW_SELECTOR = ".liveTblScorers:nth-child(1)"
@@ -214,6 +217,7 @@ class rugby_spider (scrapy.Spider) :
                         continue
                     if info_str == "\nnone     ":
                         continue
+
                     #tries events
                     if event_type == "Tries":
                         #get all the tries player and times for the home team
@@ -239,14 +243,267 @@ class rugby_spider (scrapy.Spider) :
                                 for time in time_tries:
                                     time = int(time)
                                     home_team_score_data["tries"].append(player_id)
-                                    yield {"event_type" : "try", "match_id" : match_id, "team_id" : home_team_id, "player_id" : player_id, "event_time" : time}
+                                    event = yield {"event_type" : "try", "match_id" : match_id, "team_id" : home_team_id, "player_id" : player_id, "event_time" : time}
+                                    yield {"event_data" : event}
                             elif number_tries and number_tries[0]:
                                 for i in range(0, int(number_tries[0])) :
                                     home_team_score_data["tries"].append(player_id)
                             else :
                                 home_team_score_data["tries"].append(player_id)
 
-                    yield{"home tries" : home_team_score_data}
+                    #cons events
+                    if event_type == "Cons":
+                        #get all the cons player and times for the home team
+                        cons_for_players_re = regex.match("^\\n(([a-zA-Z ]+[\d ]*(\([\d, ]+\))*),?)+\s$", info_str)
+                        if not cons_for_players_re :
+                            continue
+                        cons_for_players = cons_for_players_re.captures(2)
+                        #analyse each individual player
+                        for cons_per_player in cons_for_players :
+                            name_number_time_re = regex.match("^([a-zA-Z ]+)([\d ]*)(\(([\d]+)[, ]*\))?", cons_per_player)
+                            if not name_number_time_re :
+                                continue
+                            player_name = name_number_time_re.captures(1)[0]
+                            number_cons = name_number_time_re.captures(2)
+                            time_cons = name_number_time_re.captures(4)
+                                #try to get the player id from info string
+                            try :
+                                player_id = self._get_player_id_from_name(player_name, home_team_player_dic)
+                            except RuntimeError :
+                                player_id = "unkwon"
+                            #get the proper info and pass it in pipeline
+                            if time_cons and time_cons[0]:
+                                for time in time_cons:
+                                    time = int(time)
+                                    home_team_score_data["cons"].append(player_id)
+                                    event = {"event_type" : "cons", "match_id" : match_id, "team_id" : home_team_id, "player_id" : player_id, "event_time" : time}
+                                    yield {"event_data" : event}
+                            elif number_cons and number_cons[0]:
+                                for i in range(0, int(number_cons[0])) :
+                                    home_team_score_data["cons"].append(player_id)
+                            else :
+                                home_team_score_data["cons"].append(player_id)
+
+                    #pens events
+                    if event_type == "Pens":
+                        #get all the pens player and times for the home team
+                        pens_for_players_re = regex.match("^\\n(([a-zA-Z ]+[\d ]*(\([\d, ]+\))*),?)+\s$", info_str)
+                        if not pens_for_players_re :
+                            continue
+                        pens_for_players = pens_for_players_re.captures(2)
+                        #analyse each individual player
+                        for pens_per_player in pens_for_players :
+                            name_number_time_re = regex.match("^([a-zA-Z ]+)([\d ]*)(\(([\d]+)[, ]*\))?", pens_per_player)
+                            if not name_number_time_re :
+                                continue
+                            player_name = name_number_time_re.captures(1)[0]
+                            number_pens = name_number_time_re.captures(2)
+                            time_pens = name_number_time_re.captures(4)
+                                #try to get the player id from info string
+                            try :
+                                player_id = self._get_player_id_from_name(player_name, home_team_player_dic)
+                            except RuntimeError :
+                                player_id = "unkwon"
+                            #get the proper info and pass it in pipeline
+                            if time_pens and time_pens[0]:
+                                for time in time_pens:
+                                    time = int(time)
+                                    home_team_score_data["pens"].append(player_id)
+                                    event = {"event_type" : "pens", "match_id" : match_id, "team_id" : home_team_id, "player_id" : player_id, "event_time" : time}
+                                    yield {"event_data" : event}
+                            elif number_pens and number_pens[0]:
+                                for i in range(0, int(number_pens[0])) :
+                                    home_team_score_data["pens"].append(player_id)
+                            else :
+                                home_team_score_data["pens"].append(player_id)
+
+                    #drops events
+                    if event_type == "Drops":
+                        #get all the drops player and times for the home team
+                        drops_for_players_re = regex.match("^\\n(([a-zA-Z ]+[\d ]*(\([\d, ]+\))*),?)+\s$", info_str)
+                        if not drops_for_players_re :
+                            continue
+                        drops_for_players = drops_for_players_re.captures(2)
+                        #analyse each individual player
+                        for drops_per_player in drops_for_players :
+                            name_number_time_re = regex.match("^([a-zA-Z ]+)([\d ]*)(\(([\d]+)[, ]*\))?", drops_per_player)
+                            if not name_number_time_re :
+                                continue
+                            player_name = name_number_time_re.captures(1)[0]
+                            number_drops = name_number_time_re.captures(2)
+                            time_drops = name_number_time_re.captures(4)
+                                #try to get the player id from info string
+                            try :
+                                player_id = self._get_player_id_from_name(player_name, home_team_player_dic)
+                            except RuntimeError :
+                                player_id = "unkwon"
+                            #get the proper info and pass it in pipeline
+                            if time_drops and time_drops[0]:
+                                for time in time_drops:
+                                    time = int(time)
+                                    home_team_score_data["drops"].append(player_id)
+                                    event = {"event_type" : "drops", "match_id" : match_id, "team_id" : home_team_id, "player_id" : player_id, "event_time" : time}
+                                    yield {"event_data" : event}
+                            elif number_drops and number_drops[0]:
+                                for i in range(0, int(number_drops[0])) :
+                                    home_team_score_data["drops"].append(player_id)
+                            else :
+                                home_team_score_data["drops"].append(player_id)
+
+
+                #away team
+                AWAY_EVENT_ROW_SELECTOR = ".liveTblScorers:nth-child(2)"
+                for row in info.css(AWAY_EVENT_ROW_SELECTOR):
+                    try:
+                        event_type = row.css("span::text").extract()
+                        assert len(event_type) == 1, "did not find exacty one event type while parsing the teams info"
+                        event_type = event_type[0]
+                    except AssertionError:
+                        continue
+
+                    try :
+                        info_str = row.css("td::text").extract()
+                        assert len(info_str) == 1 , "did not find exactly one info string for a scoring data"
+                        info_str = info_str[0]
+                    except AssertionError:
+                        continue
+                    if info_str == "\nnone     ":
+                        continue
+
+                    #tries events
+                    if event_type == "Tries":
+                        #get all the tries player and times for the away team
+                        tries_for_players_re = regex.match("^\\n(([a-zA-Z ]+[\d ]*(\([\d, ]+\))*),?)+\s$", info_str)
+                        if not tries_for_players_re :
+                            continue
+                        tries_for_players = tries_for_players_re.captures(2)
+                        #analyse each individual player
+                        for tries_per_player in tries_for_players :
+                            name_number_time_re = regex.match("^([a-zA-Z ]+)([\d ]*)(\(([\d]+)[, ]*\))?", tries_per_player)
+                            if not name_number_time_re :
+                                continue
+                            player_name = name_number_time_re.captures(1)[0]
+                            number_tries = name_number_time_re.captures(2)
+                            time_tries = name_number_time_re.captures(4)
+                                #try to get the player id from info string
+                            try :
+                                player_id = self._get_player_id_from_name(player_name, away_team_player_dic)
+                            except RuntimeError :
+                                player_id = "unkwon"
+                            #get the proper info and pass it in pipeline
+                            if time_tries and time_tries[0]:
+                                for time in time_tries:
+                                    time = int(time)
+                                    away_team_score_data["tries"].append(player_id)
+                                    event = yield {"event_type" : "try", "match_id" : match_id, "team_id" : away_team_id, "player_id" : player_id, "event_time" : time}
+                                    yield {"event_data" : event}
+                            elif number_tries and number_tries[0]:
+                                for i in range(0, int(number_tries[0])) :
+                                    away_team_score_data["tries"].append(player_id)
+                            else :
+                                away_team_score_data["tries"].append(player_id)
+
+                    #cons events
+                    if event_type == "Cons":
+                        #get all the cons player and times for the away team
+                        cons_for_players_re = regex.match("^\\n(([a-zA-Z ]+[\d ]*(\([\d, ]+\))*),?)+\s$", info_str)
+                        if not cons_for_players_re :
+                            continue
+                        cons_for_players = cons_for_players_re.captures(2)
+                        #analyse each individual player
+                        for cons_per_player in cons_for_players :
+                            name_number_time_re = regex.match("^([a-zA-Z ]+)([\d ]*)(\(([\d]+)[, ]*\))?", cons_per_player)
+                            if not name_number_time_re :
+                                continue
+                            player_name = name_number_time_re.captures(1)[0]
+                            number_cons = name_number_time_re.captures(2)
+                            time_cons = name_number_time_re.captures(4)
+                                #try to get the player id from info string
+                            try :
+                                player_id = self._get_player_id_from_name(player_name, away_team_player_dic)
+                            except RuntimeError :
+                                player_id = "unkwon"
+                            #get the proper info and pass it in pipeline
+                            if time_cons and time_cons[0]:
+                                for time in time_cons:
+                                    time = int(time)
+                                    away_team_score_data["cons"].append(player_id)
+                                    event = {"event_type" : "cons", "match_id" : match_id, "team_id" : away_team_id, "player_id" : player_id, "event_time" : time}
+                                    yield {"event_data" : event}
+                            elif number_cons and number_cons[0]:
+                                for i in range(0, int(number_cons[0])) :
+                                    away_team_score_data["cons"].append(player_id)
+                            else :
+                                away_team_score_data["cons"].append(player_id)
+
+                    #pens events
+                    if event_type == "Pens":
+                        #get all the pens player and times for the away team
+                        pens_for_players_re = regex.match("^\\n(([a-zA-Z ]+[\d ]*(\([\d, ]+\))*),?)+\s$", info_str)
+                        if not pens_for_players_re :
+                            continue
+                        pens_for_players = pens_for_players_re.captures(2)
+                        #analyse each individual player
+                        for pens_per_player in pens_for_players :
+                            name_number_time_re = regex.match("^([a-zA-Z ]+)([\d ]*)(\(([\d]+)[, ]*\))?", pens_per_player)
+                            if not name_number_time_re :
+                                continue
+                            player_name = name_number_time_re.captures(1)[0]
+                            number_pens = name_number_time_re.captures(2)
+                            time_pens = name_number_time_re.captures(4)
+                                #try to get the player id from info string
+                            try :
+                                player_id = self._get_player_id_from_name(player_name, away_team_player_dic)
+                            except RuntimeError :
+                                player_id = "unkwon"
+                            #get the proper info and pass it in pipeline
+                            if time_pens and time_pens[0]:
+                                for time in time_pens:
+                                    time = int(time)
+                                    away_team_score_data["pens"].append(player_id)
+                                    event = {"event_type" : "pens", "match_id" : match_id, "team_id" : away_team_id, "player_id" : player_id, "event_time" : time}
+                                    yield {"event_data" : event}
+                            elif number_pens and number_pens[0]:
+                                for i in range(0, int(number_pens[0])) :
+                                    away_team_score_data["pens"].append(player_id)
+                            else :
+                                away_team_score_data["pens"].append(player_id)
+
+                    #drops events
+                    if event_type == "Drops":
+                        #get all the drops player and times for the away team
+                        drops_for_players_re = regex.match("^\\n(([a-zA-Z ]+[\d ]*(\([\d, ]+\))*),?)+\s$", info_str)
+                        if not drops_for_players_re :
+                            continue
+                        drops_for_players = drops_for_players_re.captures(2)
+                        #analyse each individual player
+                        for drops_per_player in drops_for_players :
+                            name_number_time_re = regex.match("^([a-zA-Z ]+)([\d ]*)(\(([\d]+)[, ]*\))?", drops_per_player)
+                            if not name_number_time_re :
+                                continue
+                            player_name = name_number_time_re.captures(1)[0]
+                            number_drops = name_number_time_re.captures(2)
+                            time_drops = name_number_time_re.captures(4)
+                                #try to get the player id from info string
+                            try :
+                                player_id = self._get_player_id_from_name(player_name, away_team_player_dic)
+                            except RuntimeError :
+                                player_id = "unkwon"
+                            #get the proper info and pass it in pipeline
+                            if time_drops and time_drops[0]:
+                                for time in time_drops:
+                                    time = int(time)
+                                    away_team_score_data["drops"].append(player_id)
+                                    event = {"event_type" : "drops", "match_id" : match_id, "team_id" : away_team_id, "player_id" : player_id, "event_time" : time}
+                                    yield {"event_data" : event}
+                            elif number_drops and number_drops[0]:
+                                for i in range(0, int(number_drops[0])) :
+                                    away_team_score_data["drops"].append(player_id)
+                            else :
+                                away_team_score_data["drops"].append(player_id)
+
+                yield{"score_data" : home_team_score_data}
+                yield{"score_data" : away_team_score_data}
 
 
 
