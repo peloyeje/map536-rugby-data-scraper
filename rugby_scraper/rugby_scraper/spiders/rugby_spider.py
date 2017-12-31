@@ -384,7 +384,7 @@ class rugby_spider (scrapy.Spider) :
                                 for time in time_tries:
                                     time = int(time)
                                     home_team_score_data["tries"].append(player_id)
-                                    event = yield {"event_type" : "try", "match_id" : match_id, "team_id" : home_team_id, "player_id" : player_id, "event_time" : time}
+                                    event = {"event_type" : "try", "match_id" : match_id, "team_id" : home_team_id, "player_id" : player_id, "event_time" : time}
                                     yield {"event_data" : event}
                             elif number_tries and number_tries[0]:
                                 for i in range(0, int(number_tries[0])) :
@@ -536,7 +536,7 @@ class rugby_spider (scrapy.Spider) :
                                 for time in time_tries:
                                     time = int(time)
                                     away_team_score_data["tries"].append(player_id)
-                                    event = yield {"event_type" : "try", "match_id" : match_id, "team_id" : away_team_id, "player_id" : player_id, "event_time" : time}
+                                    event = {"event_type" : "try", "match_id" : match_id, "team_id" : away_team_id, "player_id" : player_id, "event_time" : time}
                                     yield {"event_data" : event}
                             elif number_tries and number_tries[0]:
                                 for i in range(0, int(number_tries[0])) :
@@ -643,8 +643,8 @@ class rugby_spider (scrapy.Spider) :
                             else :
                                 away_team_score_data["drops"].append(player_id)
 
-                #yield{"score_data" : home_team_score_data}
-                #yield{"score_data" : away_team_score_data}
+                yield{"score_data" : home_team_score_data}
+                yield{"score_data" : away_team_score_data}
 
 
 
