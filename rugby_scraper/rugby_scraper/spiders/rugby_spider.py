@@ -5,6 +5,7 @@ from scrapy import Request
 from scrapy.spider import BaseSpider
 from rugby_scraper.items import Match, MatchStats
 from rugby_scraper.loaders import MatchLoader, MatchStatsLoader
+from rugby_scraper.helpers import get_player_id_from_name, get_team_dics_from_info, parse_match_stats
 
 class MainSpider(BaseSpider):
     """main spider of the scraper that will get all the statistics from the different pages of the website http://stats.espnscrum.com"""
@@ -780,7 +781,7 @@ class MainSpider(BaseSpider):
             title = info.css("h2::text").extract_first()
             if title == "Teams":
                 #getting the players lists in format {player_id :(player_name, player_position, player_number), ...}
-                get_teams_result = self._get_team_dics_from_info(info)
+                get_teams_result = get_team_dics_from_info(info)
                 if not get_teams_result:
                     continue
                 home_team_player_dic , away_team_player_dic = get_teams_result
@@ -792,6 +793,68 @@ class MainSpider(BaseSpider):
                     yield event_score
 
         #analysing the rest of the tabs in the match page
+
+                #away team
+                AWAY_EVENT_ROW_SELECTOR = ".liveTblScorers:nth-child(2)"
+                for row in info.css(AWAY_EVENT_ROW_SELECTOR):
+                    try:
+                        event_type = row.css("span::text").extract()
+                        assert len(event_type) == 1, "did not find exacty one event type while parsing the teams info"
+                        event_type = event_type[0]
+                    except AssertionError:
+                        continue
+
+                    try :
+                        info_str = row.css("td::text").extract()
+                        assert len(info_str) == 1 , "did not find exactly one info string for a scoring data"
+                        info_str = info_str[0]
+                    except AssertionError:
+                        continue
+                    if info_str == "\nnone     ":
+                        continue
+
+                    #tries events
+                    tries_results = self._parse_team_score_data (event_type, "Tries", info_str, away_team_player_dic)
+                    if not tries_results:
+                        continue
+                    for got_event in tries_results["event_data"]:
+                        event = {"event_type" : "try", "match_id" : match_id, "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                        yield {"event_data" : event}
+                    for try_player_id in tries_results["score_data"]:
+                        away_team_score_data["tries"].append(try_player_id)
+                    #cons events
+                    cons_results = self._parse_team_score_data(event_type, "Cons", info_str, away_team_player_dic)
+                    if not cons_results:
+                        continue
+                    for got_event in cons_results["event_data"]:
+                        event = {"event_type" : "cons", "match_id" : match_id, "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                        yield {"event_data" : event}
+                    for cons_player_id in cons_results["score_data"]:
+                        away_team_score_data["cons"].append(cons_player_id)
+                    #pens events
+                    pens_results = self._parse_team_score_data(event_type, "Pens", info_str, away_team_player_dic)
+                    if not pens_results:
+                        continue
+                    for got_event in pens_results["event_data"]:
+                        event = {"event_type" : "pens", "match_id" : match_id, "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                        yield {"event_data": event}
+                    for pens_player_id in pens_results["score_data"]:
+                        away_team_score_data["pens"].append(pens_player_id)
+                    #drops events
+                    drops_results = self._parse_team_score_data(event_type, "Drops", info_str, away_team_player_dic)
+                    if not drops_results:
+                        continue
+                    for got_event in drops_results["event_data"]:
+                        event = {"event_type" : "drops", "match_id" : match_id, "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                        yield {"event_data" : event}
+                    for drops_player_id in drops_results["score_data"]:
+                        away_team_score_data["drops"].append(drops_player_id)
+
+                yield{"score_data" : home_team_score_data}
+                yield{"score_data" : away_team_score_data}
+
+
+
         for info in response.css(INFO_SELECTOR):
             title = info.css("h2::text").extract_first()
             if title == "Match stats":
@@ -802,7 +865,7 @@ class MainSpider(BaseSpider):
                 home_match_stats["team_id"] = home_team_id
                 yield {"match_stat_data" : home_match_stats}
 
-                away_match_stats = self._parse_match_stats(info, team = "away")
+                away_match_stats = parse_match_stats(info, team = "away")
                 if not away_match_stats:
                     continue
                 away_match_stats["match_id"] = match_id
