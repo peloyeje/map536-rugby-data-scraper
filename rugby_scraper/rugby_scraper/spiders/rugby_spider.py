@@ -54,8 +54,8 @@ class rugby_spider (scrapy.Spider) :
     def match_page_parse(self, response):
         """match page parser that gets all the info on the match itself, each teams statistics, each players statistcs.
         - scoring data in the format {"match" : match_id, "team": team_id, "tries" : [player_1_id, player_2_id, ...], "cons" : [player_1_id, ...], "pen" : [palyer_1_id, ...], "drops" : [player_1_id, ...]}
-        - match data format : {...}
-        - player statistics format : {...}
+        - match scoring data format : {...}
+        - player statistics format : {"match_id" : int, "team_id" : int, "pens_attempt" : int, "drops_attempt" : int, "kicks" : int, "passes" : int, "runs" : int, "meters" : int, "def_beaten" : int, "offloads" : int, "rucks_init" : init , "rucks_won" : int , "mall_init" : int, "mall_won" : int, "turnovers" : int, "tackles_made" : int, "tackles_missed" : int, "scrums_won_on_feed" : int, "scrums_lost_on_feed" : int, "lineouts_won_on_throw" : "int, "lineouts_lost_on_throw" : int }
         - team statistics format : {...}
         - match events in format : {"event_type" = "event_type", "match_id" = match_id, "team_id" = home_team_id, "player_id" : player_id, "event_time" : time} with time as int in minutes
         this parser calls multiple other parser to deal with each situation
@@ -172,7 +172,7 @@ class rugby_spider (scrapy.Spider) :
 
     def _parse_match_stats(self, info, team) :
         """method that parses the Match stats tab of the match data
-        format : {"match_id" : "placeholder", "team_id" : "placeholder", "pens_attempt" : int, "drops_attempt" : int, "kicks" : int, "passes" : int, "runs" : int, "meters" : int, "def_beaten" : int, "offloads" : int, "rucks_init" : init , "rucks_won" : int , "mall_init" : int, "mall_won" : int, "turnovers" : int, "tackles_made" : int, "tackles_missed" : int, "scrums_won_on_feed" : int, "scrums_lost_on_feed" : int, "lineouts_won_on_throw" : int, "lineouts_lost_on_throw" : int, }"""
+        format : {"match_id" : "placeholder", "team_id" : "placeholder", "pens_attempt" : int, "drops_attempt" : int, "kicks" : int, "passes" : int, "runs" : int, "meters" : int, "def_beaten" : int, "offloads" : int, "rucks_init" : init , "rucks_won" : int , "mall_init" : int, "mall_won" : int, "turnovers" : int, "tackles_made" : int, "tackles_missed" : int, "scrums_won_on_feed" : int, "scrums_lost_on_feed" : int, "lineouts_won_on_throw" : "int, "lineouts_lost_on_throw" : int, }"""
 
         match_stats = {"match_id" : "placeholder", "team_id" : "placeholder"}
         assert team in ["home", "away"] , "team to analyse must be either home or away"
@@ -312,14 +312,133 @@ class rugby_spider (scrapy.Spider) :
 
     def _parse_player_stats(self, row, potential_team, potential_team_id ):
         """method that parses players match stats from row,
-        format : {"player_id" : int, }
+        format : {"match_id" : "placeholder", "player_id" : int, }
         """
 
         assert type(potential_team) is list, "potential teams must be in a list"
         assert type(potential_team_id) is list, "potential teams id must be in a list"
-        assert len(potential_team) == len(potential_team_id), "potential teams and team ids must be of same length"
+        assert len(potential_team) == len(potential_team_id) and len(potential_team) == 2, "potential teams and team ids must be of same length 2"
 
-        return row.extract()
+        player_stats = {"match_id" : "placeholder"}
+
+        #getting the player name and deducing his id and his team id
+        player_name = row.css("td:nth-child(2)::text")
+        if not player_name :
+            return None
+        player_name = player_name.extract_first()
+        player_stats["name"] = player_name
+        try :
+            home_player_id = self._get_player_id_from_name(player_name, potential_team[0])
+        except RuntimeError:
+            home_player_id = None
+        try:
+            away_player_id = self._get_player_id_from_name(player_name, potential_team[1])
+        except RuntimeError:
+            away_player_id = None
+
+        if away_player_id and home_player_id:
+            return None
+        elif not(away_player_id or home_player_id) :
+            return None
+        elif home_player_id :
+            player_id = home_player_id
+            team_id = potential_team_id[0]
+        elif away_player_id:
+            player_id = away_player_id
+            team_id = potential_team_id[1]
+        else:
+            return None
+        player_stats["player_id"] = player_id
+        player_stats["team_id"] = team_id
+
+        #getting the statistics
+        #tries and assists
+        tries_assists = row.css("td:nth-child(3)::text")
+        if tries_assists:
+            tries_assists = tries_assists.extract_first()
+            tries_assists_re = regex.match("^([0-9]+)/([0-9])+$", tries_assists)
+            if tries_assists_re:
+                tries = int(tries_assists_re.captures(1)[0])
+                player_stats["tries"] = tries
+                assists = int(tries_assists_re.captures(2)[0])
+                player_stats["assists"] = assists
+        #points
+        points = row.css("td:nth-child(4)::text")
+        if points:
+            points = int(points.extract_first())
+            player_stats["points"] = points
+        #kicks runs passes
+        k_r_p = row.css("td:nth-child(5)::text")
+        if k_r_p:
+            k_r_p = k_r_p.extract_first()
+            k_r_p_re = regex.match("^([0-9]+)/([0-9]+)/([0-9]+)$", k_r_p)
+            if k_r_p_re:
+                kicks = int(k_r_p_re.captures(1)[0])
+                player_stats["kicks"] = kicks
+                passes = int(k_r_p_re.captures(2)[0])
+                player_stats["passes"] = passes
+                runs = int(k_r_p_re.captures(3)[0])
+                player_stats["runs"] = runs
+        #meters ran
+        meters_ran = row.css("td:nth-child(6)::text")
+        if meters_ran:
+            meters_ran = int(meters_ran.extract_first())
+            player_stats["meters_ran"] = meters_ran
+        #clean breacks
+        breaks = row.css("td:nth-child(7)::text")
+        if breaks:
+            breaks = int(breaks.extract_first())
+            player_stats["breaks"] = breaks
+        #defenders beaten
+        defenders_beaten = row.css("td:nth-child(8)::text")
+        if defenders_beaten:
+            defenders_beaten = int(defenders_beaten.extract_first())
+            player_stats["defenders_beaten"] = defenders_beaten
+        #offloads
+        offloads = row.css("td:nth-child(9)::text")
+        if offloads:
+            offloads = int(offloads.extract_first())
+            player_stats["offloads"] = offloads
+        #turnovers
+        turnovers = row.css("td:nth-child(10)::text")
+        if turnovers:
+            turnovers = int(turnovers.extract_first())
+            player_stats["turnovers"] = turnovers
+        #tackles made and missed
+        tackles = row.css("td:nth-child(11)::text")
+        if tackles:
+            tackles = tackles.extract_first()
+            tackles_re = regex.match("^([0-9]+)/([0-9]+)", tackles)
+            if tackles_re:
+                tackles_made = int(tackles_re.captures(1)[0])
+                player_stats["tackles_made"] = tackles_made
+                tackles_missed = int(tackles_re.captures(2)[0])
+                player_stats["tackles_missed"] = tackles_missed
+        #lineouts
+        lineouts = row.css("td:nth-child(12)::text")
+        if lineouts:
+            lineouts = lineouts.extract_first()
+            lineouts_re = regex.match("^([0-9]+)/([0-9]+)$", lineouts)
+            if lineouts_re:
+                lineouts_won_on_throw = int(lineouts_re.captures(1)[0])
+                player_stats["lineouts_won_on_throw"] = lineouts_won_on_throw
+                lineouts_stolen_from_opp = int(lineouts_re.captures(2)[0])
+                player_stats["lineouts_stolen_from_opp"] = lineouts_stolen_from_opp
+        #penalties conceeded
+        pens_conceeded = row.css("td:nth-child(13)::text")
+        if pens_conceeded:
+            pens_conceeded = int(pens_conceeded.extract_first())
+            player_stats["pens_conceeded"] = pens_conceeded
+        #cards
+        cards = row.css("td:nth-child(14)::text")
+        if cards:
+            cards = cards.extract_first()
+            cards_re = regex.match("^([0-9]+)/([0-9]+)", cards)
+            if cards_re:
+                yellow_cards = int(cards_re.captures(1)[0])
+                red_cards = int(cards_re.captures(2)[0])
+
+        return player_stats
 
     def _match_iframe_parse(self, response):
         """parser for the internal iframe of each match page"""
@@ -687,4 +806,5 @@ class rugby_spider (scrapy.Spider) :
                     player_stats = self._parse_player_stats(player_row, potential_team = [home_team_player_dic, away_team_player_dic], potential_team_id = [home_team_id, away_team_id])
                     if not player_stats :
                         continue
+                    player_stats["match_id"] = match_id
                     yield {"player_stats" : player_stats}
