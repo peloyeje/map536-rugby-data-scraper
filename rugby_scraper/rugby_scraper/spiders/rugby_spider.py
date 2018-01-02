@@ -138,7 +138,7 @@ class rugby_spider (scrapy.Spider) :
                 #if player has no id in url, we skip to next player
                 continue
             assert len(player_id_re.groups()) == 1 , "found more than one player id in url"
-            player_id = player_id_re.group(1)
+            player_id = int(player_id_re.group(1))
             home_team_player_dic[player_id] = (player_name, player_position, player_number)
 
         #away team
@@ -165,7 +165,7 @@ class rugby_spider (scrapy.Spider) :
                 #if player has no id in url, we skip to next player
                 continue
             assert len(player_id_re.groups()) == 1 , "found more than one player id in url"
-            player_id = player_id_re.group(1)
+            player_id = int(player_id_re.group(1))
             away_team_player_dic[player_id] = (player_name, player_position, player_number)
 
         return (home_team_player_dic, away_team_player_dic)
@@ -310,6 +310,16 @@ class rugby_spider (scrapy.Spider) :
 
         return match_stats
 
+    def _parse_player_stats(self, row, potential_team, potential_team_id ):
+        """method that parses players match stats from row,
+        format : {"player_id" : int, }
+        """
+
+        assert type(potential_team) is list, "potential teams must be in a list"
+        assert type(potential_team_id) is list, "potential teams id must be in a list"
+        assert len(potential_team) == len(potential_team_id), "potential teams and team ids must be of same length"
+
+        return row.extract()
 
     def _match_iframe_parse(self, response):
         """parser for the internal iframe of each match page"""
@@ -643,29 +653,38 @@ class rugby_spider (scrapy.Spider) :
                             else :
                                 away_team_score_data["drops"].append(player_id)
 
-                yield{"score_data" : home_team_score_data}
-                yield{"score_data" : away_team_score_data}
+                #yield{"score_data" : home_team_score_data}
+                #yield{"score_data" : away_team_score_data}
 
 
 
 
 
-            elif title == "Match stats":
+        for info in response.css(INFO_SELECTOR):
+            title = info.css("h2::text").extract_first()
+            if title == "Match stats":
                 home_match_stats = self._parse_match_stats(info, team = "home")
                 if not home_match_stats :
                     continue
                 home_match_stats["match_id"] = match_id
                 home_match_stats["team_id"] = home_team_id
-                yield {"match_stat_data" : home_match_stats}
+                #yield {"match_stat_data" : home_match_stats}
 
                 away_match_stats = self._parse_match_stats(info, team = "away")
                 if not away_match_stats:
                     continue
                 away_match_stats["match_id"] = match_id
                 away_match_stats["team_id"] = away_team_id
-                yield {"match_stat_data" : away_match_stats}
+                #yield {"match_stat_data" : away_match_stats}
 
             elif title == "Timeline":
                 pass
-            elif re.search("^[a-zA-Z]+ stats$", title) :
-                pass
+            elif re.search("^[a-zA-Z ]+ stats$", title) :
+                PLAYER_ROW_SELCTOR = "table tr"
+                if not home_team_player_dic and away_team_player_dic :
+                    continue
+                for player_row in info.css(PLAYER_ROW_SELCTOR) :
+                    player_stats = self._parse_player_stats(player_row, potential_team = [home_team_player_dic, away_team_player_dic], potential_team_id = [home_team_id, away_team_id])
+                    if not player_stats :
+                        continue
+                    yield {"player_stats" : player_stats}
