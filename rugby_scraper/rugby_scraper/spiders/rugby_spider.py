@@ -3,8 +3,8 @@ import regex
 
 from scrapy import Request
 from scrapy.spider import BaseSpider
-from rugby_scraper.items import Match, MatchStats
-from rugby_scraper.loaders import MatchLoader, MatchStatsLoader
+from rugby_scraper.items import Match, MatchStats, Team
+from rugby_scraper.loaders import MatchLoader, MatchStatsLoader, TeamLoader
 from rugby_scraper.helpers import get_player_id_from_name, get_team_dics_from_info, parse_match_stats
 
 class MainSpider(BaseSpider):
@@ -73,6 +73,11 @@ class MainSpider(BaseSpider):
             "drops": "td:nth-child(9)::text",
         }
 
+        name_fields = {
+            "home_team": "td:nth-child(1) a::text",
+            "away_team": "td:nth-child(11)::text"
+        }
+
         offset = None
 
         for index, links in enumerate(response.css(".engine-dd")):
@@ -111,6 +116,14 @@ class MainSpider(BaseSpider):
 
             # Yiels stats object
             yield loader.load_item()
+
+            # Extract team info from list
+            for team, selector in name_fields.items():
+                if match.get("{}_id".format(team)):
+                    loader = TeamLoader(item = Team(), response = response)
+                    loader.add_value("team_id", match.get("{}_id".format(team)))
+                    loader.add_css("name", "tr.data1:nth-child({}) {}".format(index - offset, selector))
+                    yield loader.load_item()
 
         # Get next page link and follow it
         #NEXT_PAGE_SELECTOR = "#scrumArticlesBoxContent table:nth-child(3) tr td:nth-child(2) span:last-child a::attr(href)"

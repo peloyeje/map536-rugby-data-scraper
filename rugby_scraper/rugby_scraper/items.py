@@ -28,3 +28,9 @@ class MatchStats(Item):
     conversions = Field()
     penalties = Field()
     drops = Field()
+
+class Team(Item):
+    """Data structure to store basic team info"""
+
+    team_id = Field()
+    name = Field()
