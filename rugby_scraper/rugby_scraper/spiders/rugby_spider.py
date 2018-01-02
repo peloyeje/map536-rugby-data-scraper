@@ -1,42 +1,117 @@
 import re
 import regex
-import scrapy
 
-class rugby_spider (scrapy.Spider) :
+from scrapy import Request
+from scrapy.spider import BaseSpider
+from rugby_scraper.items import Match, MatchStats
+from rugby_scraper.loaders import MatchLoader, MatchStatsLoader
+
+class MainSpider(BaseSpider):
     """main spider of the scraper that will get all the statistics from the different pages of the website http://stats.espnscrum.com"""
 
+    # Scrapy params
     name = "main_spider"
+    allowed_domains = ["stats.espnscrum.com"]
 
+    # Custom params
+    start_endpoint = "http://stats.espnscrum.com/statsguru/rugby/stats/index.html"
+    default_endpoint_params = {
+        "class": 1, # ?,
+        "home_or_away": 1, # Only returns home team entries
+        "orderby": "date",
+        "page": 1,
+        "size": 200, # Results per page
+        "spanmin1": "24+Jul+1992", # Lower bound date
+        "spanval1": "span", # ?
+        "template": "results",
+        "type": "team",
+        "view": "match",
+    }
+
+    def _generate_search_url(self, **custom_params):
+        query_params = { **self.default_endpoint_params, **custom_params }
+        query_string = ";".join(["{}={}".format(k, v) for k, v in query_params.items()])
+
+        return "{}?{}".format(self.start_endpoint, query_string)
 
     def start_requests(self):
-        """ method  that initializes the spider by getting the first page of the following query :
+        """ Method that initializes the spider by getting the first page of the following queries :
         - all matches from all teams
         - from the 24 of july 1992 (date of the change in the way to count points in rugby)
         - ordered by date
+        - grouped by home or away
         """
-
-        urls = ["http://stats.espnscrum.com/statsguru/rugby/stats/index.html?class=1;filter=advanced;orderby=date;page=150;spanmin1=15+aug+1992;spanval1=span;template=results;type=team;view=match"]
-        for url in urls :
-            yield scrapy.Request(url = url, callback = self.match_list_parse)
-
+        #for i in [1, 2]: # Get home matches then away matches
+        yield Request(
+            url = self._generate_search_url(page = 1, home_or_away = 1),
+            callback = self.match_list_parse,
+            meta = { "home_or_away": 1 }
+        )
 
     def match_list_parse(self, response):
-        """parser that reads the pages with the lists of all the match.
-        it aims at getting the match info page
-        it also find the next list page to find
+        """
         """
 
-        #selecting the matches menu to parse match info page
-        MENU_SELECTOR = ".engine-dd"
-        for menu in response.css(MENU_SELECTOR):
-            menu_id = menu.css("div::attr(id)").extract_first()
-            if re.search("^engine-dd[0-9]+$", menu_id) :
-                #selecting the match description link in the page
-                MATCH_LINK_SELECTOR = "ul li:nth-child(6) a::attr(href)"
-                match_link = menu.css(MATCH_LINK_SELECTOR).extract_first()
-                yield response.follow(match_link, callback = self.match_page_parse)
+        id_fields = {
+            'match_id': 'li:nth-child(6) > a::attr(href)',
+            'home_team_id': 'li:nth-child(3) > a::attr(href)',
+            'away_team_id': 'li:nth-child(4) > a::attr(href)',
+            'ground_id': 'li:nth-child(5) > a::attr(href)',
+        }
 
-        ##selecting next list page to parse
+        bool_fields = {
+            "won": "td:nth-child(2)::text"
+        }
+
+        stat_fields = {
+            "scored": "td:nth-child(3)::text",
+            "conceded": "td:nth-child(4)::text",
+            "tries": "td:nth-child(6)::text",
+            "conversions": "td:nth-child(7)::text",
+            "penalties": "td:nth-child(8)::text",
+            "drops": "td:nth-child(9)::text",
+        }
+
+        offset = None
+
+        for index, links in enumerate(response.css(".engine-dd")):
+            if links.css("[id^=\"engine-dd-\"]"):
+                # Skip these useless divs
+                continue
+
+            if not offset:
+                offset = index - 1
+
+            # Extract the basic match info
+            loader = MatchLoader(item = Match(), response = response)
+            for field, selector in id_fields.items():
+                loader.add_css(field,
+                    "#engine-dd{} {}".format(index - offset, selector),
+                    re = "\/([0-9]+)\.")
+            for field, selector in bool_fields.items():
+                loader.add_css(field,
+                    "tr.data1:nth-child({}) {}".format(index - offset, selector))
+
+            match = loader.load_item()
+            # Scrapy will follow this link only for the first occurence of the match id so we avoid duplicates
+            yield response.follow(
+                url = "/statsguru/rugby/match/{}.html".format(match["match_id"]),
+                callback = self.match_page_parse,
+                meta = { "match" : match }
+            )
+
+            # Extract match stats for the given team
+            loader = MatchStatsLoader(item = MatchStats(), response = response)
+            loader.add_value("match_id", match["match_id"])
+            loader.add_value("team_id", match["home_team_id"] if response.meta["home_or_away"] == 1 else match["away_team_id"])
+            for field, selector in stat_fields.items():
+                loader.add_css(field,
+                    "tr.data1:nth-child({}) {}".format(index - offset, selector))
+
+            # Yiels stats object
+            yield loader.load_item()
+
+        # Get next page link and follow it
         #NEXT_PAGE_SELECTOR = "#scrumArticlesBoxContent table:nth-child(3) tr td:nth-child(2) span:last-child a::attr(href)"
         #next_page_link = response.css(NEXT_PAGE_SELECTOR).extract_first()
         #yield {"page" : response.url}
@@ -60,10 +135,14 @@ class rugby_spider (scrapy.Spider) :
         - match events in format : {"event_type" = "event_type", "match_id" = match_id, "team_id" = home_team_id, "player_id" : player_id, "event_time" : time} with time as int in minutes
         this parser calls multiple other parser to deal with each situation
         """
+        url = response.css("#win_old::attr(src)").extract_first()
 
-        IFRAME_LINK_SELECTOR = "#win_old::attr(src)"
-        iframe_link = response.css(IFRAME_LINK_SELECTOR).extract_first()
-        yield response.follow(iframe_link, callback = self._match_iframe_parse)
+        if url:
+            yield response.follow(
+                url = url,
+                callback = self._match_iframe_parse,
+                meta = response.meta
+            )
 
 
     def _get_player_id_from_name(self, name, team_dic) :
@@ -687,15 +766,10 @@ class rugby_spider (scrapy.Spider) :
 
     def _match_iframe_parse(self, response):
         """parser for the internal iframe of each match page"""
-        #getting match id
-        match_id_re = re.search("^http://stats.espnscrum.com/statsguru/rugby/current/match/(\d+).html", response.url)
-        assert len(match_id_re.groups()) == 1, 'match id detection failed'
-        match_id = int(match_id_re.group(1))
-        assert type(match_id) is int , "match id is not an integer"
 
-        #TO BE REPLACED
-        home_team_id = "FAKE HOME TEAM ID"
-        away_team_id = "FAKE AWAY TEAM ID"
+        # Get the forwarded match data
+        match = response.meta.get('match')
+        match_id, home_team_id, away_team_id = [match["match_id"], match["home_team_id"], match["away_team_id"]]
 
         home_team_score_data = {"match" : match_id, "team_id" : home_team_id, "tries" : [], "cons" : [], "pens" : [], "drops" : []}
         away_team_score_data = {"match" : match_id, "team_id" : away_team_id, "tries" : [], "cons" : [], "pens" : [], "drops" : []}
