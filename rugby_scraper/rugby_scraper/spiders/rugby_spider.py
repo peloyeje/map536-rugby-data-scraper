@@ -794,7 +794,7 @@ class rugby_spider (scrapy.Spider) :
                     continue
                 away_match_stats["match_id"] = match_id
                 away_match_stats["team_id"] = away_team_id
-                #yield {"match_stat_data" : away_match_stats}
+                yield {"match_stat_data" : away_match_stats}
 
             elif title == "Timeline":
                 pass
