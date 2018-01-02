@@ -42,12 +42,12 @@ class MainSpider(BaseSpider):
         - ordered by date
         - grouped by home or away
         """
-        #for i in [1, 2]: # Get home matches then away matches
-        yield Request(
-            url = self._generate_search_url(page = 1, home_or_away = 1),
-            callback = self.match_list_parse,
-            meta = { "home_or_away": 1 }
-        )
+        for i in [1, 2]: # Get home matches then away matches
+            yield Request(
+                url = self._generate_search_url(page = 1, home_or_away = i),
+                callback = self.match_list_parse,
+                meta = { "home_or_away": i }
+            )
 
     def match_list_parse(self, response):
         """
