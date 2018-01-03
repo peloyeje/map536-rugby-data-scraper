@@ -8,7 +8,7 @@ def missing_values(entry):
     return entry if entry != "-" else None
 
 class MatchLoader(ItemLoader):
-    default_input_processor = MapCompose(missing_values)
+    default_input_processor = MapCompose(missing_values, int)
     default_output_processor = TakeFirst()
 
     won_in = MapCompose(missing_values, lambda x: x == "won")
@@ -19,15 +19,19 @@ class MatchStatsLoader(ItemLoader):
     default_output_processor = TakeFirst()
 
 class TeamLoader(ItemLoader):
-    default_input_processor = MapCompose(missing_values)
+    default_input_processor = MapCompose(missing_values, int)
     default_output_processor = TakeFirst()
 
     name_in = MapCompose(missing_values, lambda x: x[2:] if x[0:2] == "v " else x)
 
 class PlayerLoader(ItemLoader):
-    default_input_processor = MapCompose(missing_values)
     default_output_processor = TakeFirst()
 
+    player_id_in = MapCompose(int)
+
 class PlayerStatsLoader(ItemLoader):
-    default_input_processor = MapCompose(missing_values)
     default_output_processor = TakeFirst()
+
+    player_id_in = MapCompose(int)
+    number_in = MapCompose(int)
+    position_in = MapCompose(lambda x: x.upper())

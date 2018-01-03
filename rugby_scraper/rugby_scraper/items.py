@@ -56,3 +56,13 @@ class PlayerStats(Item):
     conversions = Field()
     penalties = Field()
     drops = Field()
+
+class GameEvent(Item):
+    """Data structure to store game events (tries, penalties, etc.)"""
+
+    player_id = Field()
+    team_id = Field()
+    match_id = Field()
+    time = Field()
+    action_type = Field()
+    extra_info = Field()
