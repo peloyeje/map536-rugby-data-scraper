@@ -34,3 +34,25 @@ class Team(Item):
 
     team_id = Field()
     name = Field()
+
+class Player(Item):
+    """Data structure to store basic player info"""
+
+    player_id = Field()
+    name = Field()
+    height = Field()
+    weight = Field()
+
+class PlayerStats(Item):
+    """Data structure to store player stats per match"""
+
+    player_id = Field()
+    team_id = Field()
+    match_id = Field()
+    position = Field()
+    number = Field()
+    first_team = Field()
+    tries = Field()
+    conversions = Field()
+    penalties = Field()
+    drops = Field()
