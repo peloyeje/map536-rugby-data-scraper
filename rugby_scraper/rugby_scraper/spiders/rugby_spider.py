@@ -326,7 +326,6 @@ class rugby_spider (scrapy.Spider) :
         if not player_name :
             return None
         player_name = player_name.extract_first()
-        player_stats["name"] = player_name
         try :
             home_player_id = self._get_player_id_from_name(player_name, potential_team[0])
         except RuntimeError:
@@ -440,10 +439,128 @@ class rugby_spider (scrapy.Spider) :
 
         return player_stats
 
+
+    def _parse_teams_score_data(self, info, home_team_player_dic, home_team_id, away_team_player_dic, away_team_id) :
+        """method that parses the hole scoring data section of the Teams tab
+        format :
+        - event data : result["event_data"] = [{"event_type" : str, "team_id" : int, "player_id" : int, "event_time" : int}]"""
+        home_team_score_data = {"team_id" : home_team_id, "tries" : [], "cons" : [], "pens" : [], "drops" : []}
+        away_team_score_data = {"team_id" : away_team_id, "tries" : [], "cons" : [], "pens" : [], "drops" : []}
+        event_data = []
+        #home team
+        HOME_EVENT_ROW_SELECTOR = ".liveTblScorers:nth-child(1)"
+        for row in info.css(HOME_EVENT_ROW_SELECTOR):
+            try:
+                event_type = row.css("span::text").extract()
+                assert len(event_type) == 1, "did not find exacty one event type while parsing the teams info"
+                event_type = event_type[0]
+            except AssertionError:
+                continue
+
+            try :
+                info_str = row.css("td::text").extract()
+                assert len(info_str) == 1 , "did not find exactly one info string for a scoring data"
+                info_str = info_str[0]
+            except AssertionError:
+                continue
+            if info_str == "\nnone     ":
+                continue
+
+            #tries events
+            tries_results = self._parse_team_score_data (event_type, "Tries", info_str, home_team_player_dic)
+            if tries_results:
+                for got_event in tries_results["event_data"]:
+                    event = {"event_type" : "try", "team_id" : home_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                    event_data.append(event)
+                for try_player_id in tries_results["score_data"]:
+                    home_team_score_data["tries"].append(try_player_id)
+            #cons events
+            cons_results = self._parse_team_score_data(event_type, "Cons", info_str, home_team_player_dic)
+            if cons_results:
+                for got_event in cons_results["event_data"]:
+                    event = {"event_type" : "cons", "team_id" : home_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                    event_data.append(event)
+                for cons_player_id in cons_results["score_data"]:
+                    home_team_score_data["cons"].append(cons_player_id)
+            #pens events
+            pens_results = self._parse_team_score_data(event_type, "Pens", info_str, home_team_player_dic)
+            if pens_results:
+                for got_event in pens_results["event_data"]:
+                    event = {"event_type" : "pens", "team_id" : home_team_id, "player_id" : got_event[1], "got_event_time" : got_event[0]}
+                    event_data.append(event)
+                for pens_player_id in pens_results["score_data"]:
+                    home_team_score_data["pens"].append(pens_player_id)
+            #drops events
+            drops_results = self._parse_team_score_data(event_type, "Drops", info_str, home_team_player_dic)
+            if drops_results:
+                for got_event in drops_results["event_data"]:
+                    event = {"event_type" : "drops", "team_id" : home_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                    event_data.append(event)
+                for drops_player_id in drops_results["score_data"]:
+                    home_team_score_data["drops"].append(drops_player_id)
+
+        #away team
+        AWAY_EVENT_ROW_SELECTOR = ".liveTblScorers:nth-child(2)"
+        for row in info.css(AWAY_EVENT_ROW_SELECTOR):
+            try:
+                event_type = row.css("span::text").extract()
+                assert len(event_type) == 1, "did not find exacty one event type while parsing the teams info"
+                event_type = event_type[0]
+            except AssertionError:
+                continue
+
+            try :
+                info_str = row.css("td::text").extract()
+                assert len(info_str) == 1 , "did not find exactly one info string for a scoring data"
+                info_str = info_str[0]
+            except AssertionError:
+                continue
+            if info_str == "\nnone     ":
+                continue
+
+            #tries events
+            tries_results = self._parse_team_score_data (event_type, "Tries", info_str, away_team_player_dic)
+            if not tries_results:
+                continue
+            for got_event in tries_results["event_data"]:
+                event = {"event_type" : "try", "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                event_data.append(event)
+            for try_player_id in tries_results["score_data"]:
+                away_team_score_data["tries"].append(try_player_id)
+            #cons events
+            cons_results = self._parse_team_score_data(event_type, "Cons", info_str, away_team_player_dic)
+            if cons_results:
+                for got_event in cons_results["event_data"]:
+                    event = {"event_type" : "cons", "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                    event_data.append(event)
+                for cons_player_id in cons_results["score_data"]:
+                    away_team_score_data["cons"].append(cons_player_id)
+            #pens events
+            pens_results = self._parse_team_score_data(event_type, "Pens", info_str, away_team_player_dic)
+            if pens_results:
+                for got_event in pens_results["event_data"]:
+                    event = {"event_type" : "pens", "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                    event_data.append(event)
+                for pens_player_id in pens_results["score_data"]:
+                    away_team_score_data["pens"].append(pens_player_id)
+            #drops events
+            drops_results = self._parse_team_score_data(event_type, "Drops", info_str, away_team_player_dic)
+            if drops_results:
+                for got_event in drops_results["event_data"]:
+                    event = {"event_type" : "drops", "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
+                    event_data.append(event)
+                for drops_player_id in drops_results["score_data"]:
+                    away_team_score_data["drops"].append(drops_player_id)
+
+        result = {"event_data" : event_data, "home_team_score_data" : home_team_score_data, "away_team_score_data" : away_team_score_data}
+        return(result)
+
+
     def _parse_team_score_data (self, event_type, wanted_event_type, info_str, team_dic):
-        """method that returns the event_data and the list of player_ids format :
-        event_data : [(time_1, player_id_1), (time_2, player_id_2), ...]
-        player_id : [player_id_1, player_id_2, ...]
+        """method that returns the event_data and the list of player_ids from a single line of event data in the Teams tab
+        format :
+        - event_data : [(time_1, player_id_1), (time_2, player_id_2), ...]
+        - player_id : [player_id_1, player_id_2, ...]
         """
 
         result = {"event_data" : [], "score_data" : []}
@@ -457,7 +574,7 @@ class rugby_spider (scrapy.Spider) :
             for events_per_player in events_for_players :
                 name_number_time_re = regex.match("^([a-zA-Z'éàè^éäëüï ]+)([\d ]*)(\(([\d]+)[, ]*\))?", events_per_player)
                 if not name_number_time_re :
-                    return None
+                    continue
                 player_name = name_number_time_re.captures(1)[0]
                 number_events = name_number_time_re.captures(2)
                 time_events = name_number_time_re.captures(4)
@@ -495,139 +612,29 @@ class rugby_spider (scrapy.Spider) :
         home_team_score_data = {"match" : match_id, "team_id" : home_team_id, "tries" : [], "cons" : [], "pens" : [], "drops" : []}
         away_team_score_data = {"match" : match_id, "team_id" : away_team_id, "tries" : [], "cons" : [], "pens" : [], "drops" : []}
 
-        #getting the info on the match
+        #getting the info on the match first to have the player_dics
         INFO_SELECTOR = "#scrumContent .tabbertab"
         for info in response.css(INFO_SELECTOR):
             title = info.css("h2::text").extract_first()
             if title == "Teams":
-
-
                 #getting the players lists in format {player_id :(player_name, player_position, player_number), ...}
                 get_teams_result = self._get_team_dics_from_info(info)
                 if not get_teams_result:
                     continue
                 home_team_player_dic , away_team_player_dic = get_teams_result
-
                 #getting the score and event data
-                #home team
-                HOME_EVENT_ROW_SELECTOR = ".liveTblScorers:nth-child(1)"
-                for row in info.css(HOME_EVENT_ROW_SELECTOR):
-                    try:
-                        event_type = row.css("span::text").extract()
-                        assert len(event_type) == 1, "did not find exacty one event type while parsing the teams info"
-                        event_type = event_type[0]
-                    except AssertionError:
-                        continue
-
-                    try :
-                        info_str = row.css("td::text").extract()
-                        assert len(info_str) == 1 , "did not find exactly one info string for a scoring data"
-                        info_str = info_str[0]
-                    except AssertionError:
-                        continue
-                    if info_str == "\nnone     ":
-                        continue
-
-                    #tries events
-                    tries_results = self._parse_team_score_data (event_type, "Tries", info_str, home_team_player_dic)
-                    if not tries_results:
-                        continue
-                    for got_event in tries_results["event_data"]:
-                        event = {"event_type" : "try", "match_id" : match_id, "team_id" : home_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
-                        yield {"event_data" : event}
-                    for try_player_id in tries_results["score_data"]:
-                        home_team_score_data["tries"].append(try_player_id)
-                    #cons events
-                    cons_results = self._parse_team_score_data(event_type, "Cons", info_str, home_team_player_dic)
-                    if not cons_results:
-                        continue
-                    for got_event in cons_results["event_data"]:
-                        event = {"event_type" : "cons", "match_id" : match_id, "team_id" : home_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
-                        yield {"event_data" : event}
-                    for cons_player_id in cons_results["score_data"]:
-                        home_team_score_data["cons"].append(cons_player_id)
-                    #pens events
-                    pens_results = self._parse_team_score_data(event_type, "Pens", info_str, home_team_player_dic)
-                    if not pens_results:
-                        continue
-                    for got_event in pens_results["event_data"]:
-                        event = {"event_type" : "pens", "match_id" : match_id, "team_id" : home_team_id, "player_id" : got_event[1], "got_event_time" : got_event[0]}
-                        yield {"event_data": event}
-                    for pens_player_id in pens_results["score_data"]:
-                        home_team_score_data["pens"].append(pens_player_id)
-                    #drops events
-                    drops_results = self._parse_team_score_data(event_type, "Drops", info_str, home_team_player_dic)
-                    if not drops_results:
-                        continue
-                    for got_event in drops_results["event_data"]:
-                        event = {"event_type" : "drops", "match_id" : match_id, "team_id" : home_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
-                        yield {"event_data" : event}
-                    for drops_player_id in drops_results["score_data"]:
-                        home_team_score_data["drops"].append(drops_player_id)
-
-                #away team
-                AWAY_EVENT_ROW_SELECTOR = ".liveTblScorers:nth-child(2)"
-                for row in info.css(AWAY_EVENT_ROW_SELECTOR):
-                    try:
-                        event_type = row.css("span::text").extract()
-                        assert len(event_type) == 1, "did not find exacty one event type while parsing the teams info"
-                        event_type = event_type[0]
-                    except AssertionError:
-                        continue
-
-                    try :
-                        info_str = row.css("td::text").extract()
-                        assert len(info_str) == 1 , "did not find exactly one info string for a scoring data"
-                        info_str = info_str[0]
-                    except AssertionError:
-                        continue
-                    if info_str == "\nnone     ":
-                        continue
-
-                    #tries events
-                    tries_results = self._parse_team_score_data (event_type, "Tries", info_str, away_team_player_dic)
-                    if not tries_results:
-                        continue
-                    for got_event in tries_results["event_data"]:
-                        event = {"event_type" : "try", "match_id" : match_id, "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
-                        yield {"event_data" : event}
-                    for try_player_id in tries_results["score_data"]:
-                        away_team_score_data["tries"].append(try_player_id)
-                    #cons events
-                    cons_results = self._parse_team_score_data(event_type, "Cons", info_str, away_team_player_dic)
-                    if not cons_results:
-                        continue
-                    for got_event in cons_results["event_data"]:
-                        event = {"event_type" : "cons", "match_id" : match_id, "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
-                        yield {"event_data" : event}
-                    for cons_player_id in cons_results["score_data"]:
-                        away_team_score_data["cons"].append(cons_player_id)
-                    #pens events
-                    pens_results = self._parse_team_score_data(event_type, "Pens", info_str, away_team_player_dic)
-                    if not pens_results:
-                        continue
-                    for got_event in pens_results["event_data"]:
-                        event = {"event_type" : "pens", "match_id" : match_id, "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
-                        yield {"event_data": event}
-                    for pens_player_id in pens_results["score_data"]:
-                        away_team_score_data["pens"].append(pens_player_id)
-                    #drops events
-                    drops_results = self._parse_team_score_data(event_type, "Drops", info_str, away_team_player_dic)
-                    if not drops_results:
-                        continue
-                    for got_event in drops_results["event_data"]:
-                        event = {"event_type" : "drops", "match_id" : match_id, "team_id" : away_team_id, "player_id" : got_event[1], "event_time" : got_event[0]}
-                        yield {"event_data" : event}
-                    for drops_player_id in drops_results["score_data"]:
-                        away_team_score_data["drops"].append(drops_player_id)
-
+                event_score_results = self._parse_teams_score_data( info, home_team_player_dic, home_team_id, away_team_player_dic, away_team_id)
+                for event in event_score_results["event_data"] :
+                    event["match_id"] = match_id
+                    yield {"event_data" : event}
+                home_team_score_data = event_score_results["home_team_score_data"]
+                home_team_score_data["match_id"] = match_id
+                away_team_score_data = event_score_results["away_team_score_data"]
+                away_team_score_data["match_id"] = match_id
                 yield{"score_data" : home_team_score_data}
                 yield{"score_data" : away_team_score_data}
 
-
-
-
-
+        #analysing the rest of the tabs in the match page
         for info in response.css(INFO_SELECTOR):
             title = info.css("h2::text").extract_first()
             if title == "Match stats":
@@ -636,14 +643,14 @@ class rugby_spider (scrapy.Spider) :
                     continue
                 home_match_stats["match_id"] = match_id
                 home_match_stats["team_id"] = home_team_id
-                yield {"match_stat_data" : home_match_stats}
+                #yield {"match_stat_data" : home_match_stats}
 
                 away_match_stats = self._parse_match_stats(info, team = "away")
                 if not away_match_stats:
                     continue
                 away_match_stats["match_id"] = match_id
                 away_match_stats["team_id"] = away_team_id
-                yield {"match_stat_data" : away_match_stats}
+                #yield {"match_stat_data" : away_match_stats}
 
             elif title == "Timeline":
                 pass
@@ -656,4 +663,4 @@ class rugby_spider (scrapy.Spider) :
                     if not player_stats :
                         continue
                     player_stats["match_id"] = match_id
-                    yield {"player_stats" : player_stats}
+                    #yield {"player_stats" : player_stats}
