@@ -482,6 +482,11 @@ class rugby_spider (scrapy.Spider) :
                     home_team_score_data["tries"].append(try_player_id)
                 except KeyError:
                     pass
+                try:
+                    debug = result["debug"]
+                    yield {"debug" : debug}
+                except KeyError:
+                    pass
             #cons events
             cons_results = self._parse_team_score_data(event_type, "Cons", info_str, home_team_player_dic)
             for result in cons_results :
@@ -494,6 +499,11 @@ class rugby_spider (scrapy.Spider) :
                 try:
                     cons_player_id = result["score"]
                     home_team_score_data["cons"].append(cons_player_id)
+                except KeyError:
+                    pass
+                try:
+                    debug = result["debug"]
+                    yield {"debug" : debug}
                 except KeyError:
                     pass
             #pens events
@@ -510,6 +520,11 @@ class rugby_spider (scrapy.Spider) :
                     home_team_score_data["pens"].append(pens_player_id)
                 except KeyError:
                     pass
+                try:
+                    debug = result["debug"]
+                    yield {"debug" : debug}
+                except KeyError:
+                    pass
             #drops events
             drops_results = self._parse_team_score_data(event_type, "Drops", info_str, home_team_player_dic)
             for result in drops_results :
@@ -522,6 +537,11 @@ class rugby_spider (scrapy.Spider) :
                 try:
                     drops_player_id = result["score"]
                     home_team_score_data["drops"].append(drops_player_id)
+                except KeyError:
+                    pass
+                try:
+                    debug = result["debug"]
+                    yield {"debug" : debug}
                 except KeyError:
                     pass
 
@@ -558,6 +578,11 @@ class rugby_spider (scrapy.Spider) :
                     away_team_score_data["tries"].append(try_player_id)
                 except KeyError:
                     pass
+                try:
+                    debug = result["debug"]
+                    yield {"debug" : debug}
+                except KeyError:
+                    pass
             #cons events
             cons_results = self._parse_team_score_data(event_type, "Cons", info_str, away_team_player_dic)
             for result in cons_results :
@@ -570,6 +595,11 @@ class rugby_spider (scrapy.Spider) :
                 try:
                     con_player_id = result["score"]
                     away_team_score_data["cons"].append(con_player_id)
+                except KeyError:
+                    pass
+                try:
+                    debug = result["debug"]
+                    yield {"debug" : debug}
                 except KeyError:
                     pass
             #pens events
@@ -586,6 +616,11 @@ class rugby_spider (scrapy.Spider) :
                     away_team_score_data["pens"].append(pens_player_id)
                 except KeyError:
                     pass
+                try:
+                    debug = result["debug"]
+                    yield {"debug" : debug}
+                except KeyError:
+                    pass
             #drops events
             drops_results = self._parse_team_score_data(event_type, "Drops", info_str, away_team_player_dic)
             for result in drops_results :
@@ -598,6 +633,11 @@ class rugby_spider (scrapy.Spider) :
                 try:
                     drops_player_id = result["score"]
                     away_team_score_data["drops"].append(drops_player_id)
+                except KeyError:
+                    pass
+                try:
+                    debug = result["debug"]
+                    yield {"debug" : debug}
                 except KeyError:
                     pass
 
@@ -624,15 +664,14 @@ class rugby_spider (scrapy.Spider) :
                 if not name_number_time_re :
                     continue
                 player_name = name_number_time_re.captures(1)[0]
-                if player_name == " " :
-                    continue
                 number_events = name_number_time_re.captures(2)
                 time_events = name_number_time_re.captures(4)
                     #try to get the player id from info string
                 try :
                     player_id = self._get_player_id_from_name(player_name, team_dic)
                 except RuntimeError :
-                    player_id = "unkwon"
+                    if not regex.match("^[\s]+$", player_name):
+                        player_id = "unknown"
                 #get the proper info and pass it in pipeline
                 if time_events and time_events[0]:
                     for time in time_events:
@@ -687,14 +726,14 @@ class rugby_spider (scrapy.Spider) :
                     continue
                 home_match_stats["match_id"] = match_id
                 home_match_stats["team_id"] = home_team_id
-                #yield {"match_stat_data" : home_match_stats}
+                yield {"match_stat_data" : home_match_stats}
 
                 away_match_stats = self._parse_match_stats(info, team = "away")
                 if not away_match_stats:
                     continue
                 away_match_stats["match_id"] = match_id
                 away_match_stats["team_id"] = away_team_id
-                #yield {"match_stat_data" : away_match_stats}
+                yield {"match_stat_data" : away_match_stats}
 
             elif title == "Timeline":
                 pass
@@ -707,4 +746,4 @@ class rugby_spider (scrapy.Spider) :
                     if not player_stats :
                         continue
                     player_stats["match_id"] = match_id
-                    #yield {"player_stats" : player_stats}
+                    yield {"player_stats" : player_stats}
