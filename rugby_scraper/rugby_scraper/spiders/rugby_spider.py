@@ -510,252 +510,6 @@ class MainSpider(BaseSpider):
         return player_stats
 
 
-    def _parse_teams_score_data(self, info, player_dict, match) :
-        """generator that parses the hole scoring data section of the Teams tab
-        format :
-        - event data : {"event_type" : str, "team_id" : int, "player_id" : int, "event_time" : int}
-        - score_data : {"team_id" : int, "match_id" : int, "tries" : [player_id_1, player_id_2, ...], "cons" : [player_id_1, ...], "pens" : [player_id_1, ...], "drops" : [player_id_1, ...]}
-        """
-
-        home_team_score_data = {"team_id" : match["home_team_id"], "match_id" : match["match_id"], "tries" : [], "cons" : [], "pens" : [], "drops" : []}
-        away_team_score_data = {"team_id" : match["away_team_id"], "match_id" : match["match_id"], "tries" : [], "cons" : [], "pens" : [], "drops" : []}
-        #home team
-        HOME_EVENT_ROW_SELECTOR = ".liveTblScorers:nth-child(1)"
-        for row in info.css(HOME_EVENT_ROW_SELECTOR):
-            try:
-                event_type = row.css("span::text").extract()
-                assert len(event_type) == 1, "did not find exacty one event type while parsing the teams info"
-                event_type = event_type[0]
-            except AssertionError:
-                continue
-
-            try :
-                info_str = row.css("td::text").extract()
-                assert len(info_str) == 1 , "did not find exactly one info string for a scoring data"
-                info_str = info_str[0]
-            except AssertionError:
-                continue
-            if info_str == "\nnone     ":
-                continue
-
-            #tries events
-            tries_results = self._parse_team_score_data (event_type, "Tries", info_str, player_dict["home"])
-            for result in tries_results :
-                try:
-                    got_event = result["event"]
-                    event = {"event_type" : "try", "match_id" : match["match_id"], "team_id" : match["home_team_id"], "player_id" : got_event[1], "event_time" : got_event[0]}
-                    yield {"event_data" : event}
-                except KeyError :
-                    pass
-                try:
-                    try_player_id = result["score"]
-                    home_team_score_data["tries"].append(try_player_id)
-                except KeyError:
-                    pass
-                try:
-                    debug = result["debug"]
-                    yield {"debug" : debug}
-                except KeyError:
-                    pass
-            #cons events
-            cons_results = self._parse_team_score_data(event_type, "Cons", info_str, player_dict["home"])
-            for result in cons_results :
-                try:
-                    got_event = result["event"]
-                    event = {"event_type" : "con", "match_id" : match["match_id"], "team_id" : match["home_team_id"], "player_id" : got_event[1], "event_time" : got_event[0]}
-                    yield {"event_data" : event}
-                except KeyError :
-                    pass
-                try:
-                    cons_player_id = result["score"]
-                    home_team_score_data["cons"].append(cons_player_id)
-                except KeyError:
-                    pass
-                try:
-                    debug = result["debug"]
-                    yield {"debug" : debug}
-                except KeyError:
-                    pass
-            #pens events
-            pens_results = self._parse_team_score_data(event_type, "Pens", info_str, player_dict["home"])
-            for result in pens_results :
-                try:
-                    got_event = result["event"]
-                    event = {"event_type" : "pen", "match_id" : match["match_id"], "team_id" : match["home_team_id"], "player_id" : got_event[1], "event_time" : got_event[0]}
-                    yield {"event_data" : event}
-                except KeyError :
-                    pass
-                try:
-                    pens_player_id = result["score"]
-                    home_team_score_data["pens"].append(pens_player_id)
-                except KeyError:
-                    pass
-                try:
-                    debug = result["debug"]
-                    yield {"debug" : debug}
-                except KeyError:
-                    pass
-            #drops events
-            drops_results = self._parse_team_score_data(event_type, "Drops", info_str, player_dict["home"])
-            for result in drops_results :
-                try:
-                    got_event = result["event"]
-                    event = {"event_type" : "drop", "match_id" : match["match_id"], "team_id" : match["home_team_id"], "player_id" : got_event[1], "event_time" : got_event[0]}
-                    yield {"event_data" : event}
-                except KeyError :
-                    pass
-                try:
-                    drops_player_id = result["score"]
-                    home_team_score_data["drops"].append(drops_player_id)
-                except KeyError:
-                    pass
-                try:
-                    debug = result["debug"]
-                    yield {"debug" : debug}
-                except KeyError:
-                    pass
-
-        #away team
-        AWAY_EVENT_ROW_SELECTOR = ".liveTblScorers:nth-child(2)"
-        for row in info.css(AWAY_EVENT_ROW_SELECTOR):
-            try:
-                event_type = row.css("span::text").extract()
-                assert len(event_type) == 1, "did not find exacty one event type while parsing the teams info"
-                event_type = event_type[0]
-            except AssertionError:
-                continue
-
-            try :
-                info_str = row.css("td::text").extract()
-                assert len(info_str) == 1 , "did not find exactly one info string for a scoring data"
-                info_str = info_str[0]
-            except AssertionError:
-                continue
-            if info_str == "\nnone     ":
-                continue
-
-            #tries events
-            tries_results = self._parse_team_score_data (event_type, "Tries", info_str, player_dict["away"])
-            for result in tries_results :
-                try:
-                    got_event = result["event"]
-                    event = {"event_type" : "try", "match_id" : match["match_id"], "team_id" : match["away_team_id"], "player_id" : got_event[1], "event_time" : got_event[0]}
-                    yield {"event_data" : event}
-                except KeyError :
-                    pass
-                try:
-                    try_player_id = result["score"]
-                    away_team_score_data["tries"].append(try_player_id)
-                except KeyError:
-                    pass
-                try:
-                    debug = result["debug"]
-                    yield {"debug" : debug}
-                except KeyError:
-                    pass
-            #cons events
-            cons_results = self._parse_team_score_data(event_type, "Cons", info_str, player_dict["away"])
-            for result in cons_results :
-                try:
-                    got_event = result["event"]
-                    event = {"event_type" : "con", "match_id" : match["match_id"], "team_id" : match["away_team_id"], "player_id" : got_event[1], "event_time" : got_event[0]}
-                    yield {"event_data" : event}
-                except KeyError :
-                    pass
-                try:
-                    con_player_id = result["score"]
-                    away_team_score_data["cons"].append(con_player_id)
-                except KeyError:
-                    pass
-                try:
-                    debug = result["debug"]
-                    yield {"debug" : debug}
-                except KeyError:
-                    pass
-            #pens events
-            pens_results = self._parse_team_score_data(event_type, "Pens", info_str, player_dict["away"])
-            for result in pens_results :
-                try:
-                    got_event = result["event"]
-                    event = {"event_type" : "pen", "match_id" : match["match_id"], "team_id" : match["away_team_id"], "player_id" : got_event[1], "event_time" : got_event[0]}
-                    yield {"event_data" : event}
-                except KeyError :
-                    pass
-                try:
-                    pens_player_id = result["score"]
-                    away_team_score_data["pens"].append(pens_player_id)
-                except KeyError:
-                    pass
-                try:
-                    debug = result["debug"]
-                    yield {"debug" : debug}
-                except KeyError:
-                    pass
-            #drops events
-            drops_results = self._parse_team_score_data(event_type, "Drops", info_str, player_dict["away"])
-            for result in drops_results :
-                try:
-                    got_event = result["event"]
-                    event = {"event_type" : "drop", "match_id" : match["match_id"], "team_id" : match["away_team_id"], "player_id" : got_event[1], "event_time" : got_event[0]}
-                    yield {"event_data" : event}
-                except KeyError :
-                    pass
-                try:
-                    drops_player_id = result["score"]
-                    away_team_score_data["drops"].append(drops_player_id)
-                except KeyError:
-                    pass
-                try:
-                    debug = result["debug"]
-                    yield {"debug" : debug}
-                except KeyError:
-                    pass
-
-        yield {"score_data" : home_team_score_data}
-        yield {"score_data" : away_team_score_data}
-
-
-    def _parse_team_score_data (self, event_type, wanted_event_type, info_str, team_dic):
-        """generator that returns the event_data and the player_ids from a single line of event data in the Teams tab
-        format :
-        - event_data : {"event" : (time, player_id)}
-        - player_id : {"score" : player_id}
-        """
-
-        if event_type == wanted_event_type:
-            #get all the events player and times for the home team
-            events_for_players_re = regex.match("^\\n(([a-zA-Z'éàè^éäëüï ]+[\d ]*(\([\d, ]+\))*),?)+\s$", info_str)
-            if not events_for_players_re :
-                return None
-            events_for_players = events_for_players_re.captures(2)
-            #analyse each individual player
-            for events_per_player in events_for_players :
-                name_number_time_re = regex.match("^([a-zA-Z'éàè^éäëüï ]+)([\d ]*)(\(([\d]+)[, ]*\))?", events_per_player)
-                if not name_number_time_re :
-                    continue
-                player_name = name_number_time_re.captures(1)[0]
-                number_events = name_number_time_re.captures(2)
-                time_events = name_number_time_re.captures(4)
-                    #try to get the player id from info string
-                try :
-                    player_id = self._get_player_id_from_name(player_name, team_dic)
-                except RuntimeError :
-                    if not regex.match("^[\s]+$", player_name):
-                        player_id = "unknown"
-                #get the proper info and pass it in pipeline
-                if time_events and time_events[0]:
-                    for time in time_events:
-                        time = int(time)
-                        yield {"score" : player_id}
-                        pre_event = (time ,player_id)
-                        yield {"event" : pre_event}
-                elif number_events and number_events[0]:
-                    for i in range(0, int(number_events[0])) :
-                        yield {"score" : player_id}
-                else :
-                    yield {"score" : player_id}
-
-
     def _match_iframe_parse(self, response):
         """parser for the internal iframe of each match page"""
 
@@ -763,9 +517,11 @@ class MainSpider(BaseSpider):
         match = response.meta.get('match')
 
         # Start the actual parsing
+        self.logger.info("[{}] Start parsing match data ...".format(match["match_id"]))
         # 1) Get an array of the tabs indexed by title
         tabs = response.css("#scrumContent .tabbertab")
         if not tabs:
+            self.logger.error("[{}] No tabs, aborting.".format(match["match_id"]))
             return # If no tabs, we have no match info, so drop this request
 
         tabs = [(tab.css("h2::text").extract_first(), tab) for tab in tabs]
@@ -776,13 +532,19 @@ class MainSpider(BaseSpider):
         #    - extract match specific info and creates requests to player match page
 
         if "Teams" not in tabs:
+            self.logger.error("[{}] No \"Teams\" tab, aborting.".format(match["match_id"]))
             return # We ain't gonna do nothin' bru
+        self.logger.info("[{}] Found {} tabs : {}".format(match["match_id"], len(tabs), ", ".join(tabs.keys())))
 
         # Create players dict to match _parse_teams_score_data inputs
         player_dict = { "home": {}, "away": {}}
 
         # For each team
         teams = tabs["Teams"].css("table tr:last-child .divTeams")
+        if len(teams) < 2:
+            # Hmm hmm ...
+            return
+
         for index, team in enumerate(teams):
             # For each team group (first team or replacements)
             for position, group in enumerate(team.xpath("table")):
@@ -797,8 +559,9 @@ class MainSpider(BaseSpider):
                     # Discard players without id
                     if not player_info:
                         continue
+
                     # Go to the player page to scrape it
-                    #yield player_info
+                    yield player_info
                     # yield response.follow(
                     #     url = "/statsguru/rugby/player/{}.html".format(player_info["player_id"]),
                     #     callback = self.player_info_parse,
@@ -809,6 +572,7 @@ class MainSpider(BaseSpider):
                         "number" : "td.liveTblTextGrn::text",
                         "position" : "td.liveTblColCtr::text",
                     }
+
                     # Get match-specific info for each player
                     player_stats_loader = PlayerStatsLoader(item = PlayerStats(), response = response, selector = player)
                     player_stats_loader.add_value("player_id", player_info["player_id"])
@@ -819,7 +583,7 @@ class MainSpider(BaseSpider):
                         player_stats_loader.add_css(field, selector)
                     player_stats = player_stats_loader.load_item()
 
-                    #yield player_stats
+                    yield player_stats
                     # Experimental : go to the match list of the player to retrieve match stats (pens/cons/tries/drops)
                     # yield response.follow(
                     #     url = "/statsguru/rugby/player/{}.html?{}".format(player_info["player_id"], self._generate_query_string(self.player_params)),
@@ -833,9 +597,12 @@ class MainSpider(BaseSpider):
 
         # Abort parsing if we don't have info on players
         if not player_dict["home"] or not player_dict["away"]:
+            self.logger.error("[{}] Missing player data in \"Teams\" tab, aborting.".format(match["match_id"]))
             return
+        self.logger.info("[{}] Found {} players for home team ({}) and {} players for away team ({})".format(match["match_id"], len(player_dict["home"]), match["home_team_id"], len(player_dict["away"]), match["away_team_id"]))
 
         # 3) Parse top summary of the Teams tab to retrieve the names of the players who scored
+        self.logger.info("[{}] Begin score parsing ...".format(match["match_id"]))
         scores = tabs["Teams"].css(".liveTblScorers")
         if scores and len(scores) > 1:
             # Everything is pretty all right' man
@@ -846,19 +613,26 @@ class MainSpider(BaseSpider):
                     # Extract from html
                     fields = (score.css(".liveTblTextGrn::text").extract_first(), score.css("td::text").extract_first())
                     if not all(fields):
-                        self.logger.debug("Match {} dismissed, not all fields present", match["match_id"])
+                        self.logger.info("[{}] Skipping score entry, not all fields present. Skipping.", match["match_id"])
                         continue
+
                     # Format the parsed data
                     event_type, event_data = [item.rstrip().replace("\n", "") for item in fields]
+                    if not event_type.lower() in ["pens", "tries", "drops", "cons"]:
+                        # Event type not supported
+                        self.logger.info("[{}] Unsupported event \"{}\". Skipping.".format(match["match_id"], event_type))
+                        continue
+                    self.logger.info("[{}] Handling event \"{}\" ...".format(match["match_id"], event_type))
                     if event_data == "none":
-                        self.logger.debug("[{}] No data for event type \"{}\"".format(match["match_id"], event_type))
+                        self.logger.info("[{}] ({}) No data for event. Skipping.".format(match["match_id"], event_type))
                         continue
 
                     # Do the regex matching
                     # First, split the event string to get each player separately
                     list_of_events = regex.match("^(([\w\- ]+[\d ]*(\([\d, ]+\))*),?)+", event_data)
                     if not list_of_events:
-                        self.logger.debug("[{}] ({}) Can't extract player names for string \"{}\"".format(match["match_id"], event_type, event_data))
+                        self.logger.warning("[{}] ({}) Can't extract player actions. Skipping.".format(match["match_id"], event_type))
+                        self.logger.debug("String : {}".format(event_data))
                         continue
 
                     # Cleaning of trailing spaces
@@ -870,7 +644,8 @@ class MainSpider(BaseSpider):
                     for event in list_of_events:
                         event_parsed = regex.match("^([\w\-]+) *([\d ])*(?:\((?:(\d+)[, ]*)*\))*", event)
                         if not event_parsed:
-                            self.logger.debug("[{}] ({}) Parsing failed for string \"{}\"".format(match["match_id"], event_type, event))
+                            self.logger.warning("[{}] ({}) Action parsing failed. Skipping.".format(match["match_id"], event_type))
+                            self.logger.debug("String : {}".format(event))
                             continue
 
                         name = event_parsed.captures(1)
@@ -886,6 +661,7 @@ class MainSpider(BaseSpider):
                             player_id = self._get_player_id_from_name(name[0], player_dict["home" if index == 0 else "away"])
                         except RuntimeError:
                             # Drop game events that can't be associated to a player
+                            self.logger.warning("[{}] ({}) Unable to guess player id for \"{}\". Skipping.".format(match["match_id"], event_type, name[0]))
                             continue
 
                         if times:
@@ -898,8 +674,8 @@ class MainSpider(BaseSpider):
                                 loader.add_value("time", time)
                                 loader.add_value("action_type", event_type.lower())
                                 game_event = loader.load_item()
-                                self.logger.info("[{}] {} > {} ({}) at time {}\"".format(game_event["match_id"], game_event["action_type"], name[0], game_event["player_id"], game_event["time"]))
-                                #yield game_event
+                                self.logger.info("[{}] ({}) Event : {} ({}) at time {}\"".format(game_event["match_id"], game_event["action_type"], name[0], game_event["player_id"], game_event["time"]))
+                                yield game_event
 
                         player_scores[player_id][event_type.lower()] += max(len(occurences)+1, len(times))
 
@@ -914,6 +690,7 @@ class MainSpider(BaseSpider):
                     for stat_name, stat_value in player_score.items():
                         loader.add_value(stat_name, stat_value)
                     player_stats = loader.load_item()
+                    self.logger.info("[{}] Stats for {} ({}) : {}".format(match["match_id"], name[0], player_id, player_score))
                     yield player_stats
 
         #
