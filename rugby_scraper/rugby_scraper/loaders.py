@@ -2,10 +2,15 @@
 import arrow
 
 from scrapy.loader import ItemLoader
-from scrapy.loader.processors import TakeFirst, MapCompose
+from scrapy.loader.processors import TakeFirst, MapCompose, Compose
 
 def missing_values(entry):
-    return entry if entry != "-" else None
+    tokens = str(entry).split(" ")
+    banned = ["-", "unknown"]
+
+    if any((token in banned for token in tokens)):
+        return None
+    return entry
 
 class MatchLoader(ItemLoader):
     default_input_processor = MapCompose(missing_values, int)
@@ -13,6 +18,7 @@ class MatchLoader(ItemLoader):
 
     won_in = MapCompose(missing_values, lambda x: x == "won")
     date_in = MapCompose(missing_values, lambda x: arrow.get(x, "D MMM YYYY", locale = "en_us"))
+    date_out = Compose(lambda x: x[0].isoformat())
 
 class MatchStatsLoader(ItemLoader):
     default_input_processor = MapCompose(missing_values, int)
@@ -32,6 +38,8 @@ class PlayerLoader(ItemLoader):
     default_output_processor = TakeFirst()
 
     player_id_in = MapCompose(int)
+    birthday_in = MapCompose(lambda x: arrow.get(x, "MMMM D, YYYY", locale = "en_us"))
+    birthday_out = Compose(lambda x: x[0].isoformat())
 
 class PlayerStatsLoader(ItemLoader):
     default_output_processor = TakeFirst()

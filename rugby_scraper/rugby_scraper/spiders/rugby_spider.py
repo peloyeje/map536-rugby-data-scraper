@@ -126,6 +126,7 @@ class MainSpider(BaseSpider):
 
             # Follow each match link to get additional info (player stats, etc.)
             # Scrapy will follow this link only for the first occurence of the match id so we avoid duplicates
+            yield match
             yield response.follow(
                 url = "/statsguru/rugby/match/{}.html".format(match["match_id"]),
                 callback = self.match_page_parse,
@@ -174,7 +175,25 @@ class MainSpider(BaseSpider):
         """player page parser that gets the info on a specific player
         it returns the information in the format : {...}
         """
-        yield response.meta["player_info"]
+
+        fields = {
+            "Full name": "full_name",
+            "Born": "birthday",
+            "Height": "height",
+            "Weight": "weight"
+        }
+
+        infos = response.css("#scrumPlayerContent table .scrumPlayerDesc")
+        if infos:
+            loader = PlayerLoader(item = response.meta["player_info"], response = response)
+            for info in infos:
+                title = info.xpath("b/text()").extract_first()
+                if title and title in fields.keys():
+                    value = info.xpath("text()").extract_first()
+                    if value:
+                        loader.add_value(fields.get(title), value.strip())
+            yield loader.load_item()
+
 
     def player_matches_parse(self, response):
         """"""
@@ -519,12 +538,11 @@ class MainSpider(BaseSpider):
                         continue
 
                     # Go to the player page to scrape it
-                    yield player_info
-                    # yield response.follow(
-                    #     url = "/statsguru/rugby/player/{}.html".format(player_info["player_id"]),
-                    #     callback = self.player_info_parse,
-                    #     meta = { "player_info" : player_info }
-                    # )
+                    yield response.follow(
+                        url = "/statsguru/rugby/player/{}.html".format(player_info["player_id"]),
+                        callback = self.player_info_parse,
+                        meta = { "player_info" : player_info }
+                    )
 
                     player_stats_fields = {
                         "number" : "td.liveTblTextGrn::text",

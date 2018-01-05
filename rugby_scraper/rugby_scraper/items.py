@@ -69,6 +69,8 @@ class Player(Item):
 
     player_id = Field()
     name = Field()
+    full_name = Field()
+    birthday = Field()
     height = Field()
     weight = Field()
 
