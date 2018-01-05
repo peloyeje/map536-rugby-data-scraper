@@ -14,7 +14,7 @@ BOT_NAME = 'rugby_scraper'
 SPIDER_MODULES = ['rugby_scraper.spiders']
 NEWSPIDER_MODULE = 'rugby_scraper.spiders'
 
-
+LOG_LEVEL = 'INFO'
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'rugby_scraper (+http://www.yourdomain.com)'
 
@@ -88,3 +88,6 @@ ROBOTSTXT_OBEY = True
 #HTTPCACHE_DIR = 'httpcache'
 #HTTPCACHE_IGNORE_HTTP_CODES = []
 #HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
+
+FEED_URI = "./rugby.json"
+FEED_FORMAT = "json"
