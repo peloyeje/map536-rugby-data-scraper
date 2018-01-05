@@ -5,8 +5,8 @@ from collections import defaultdict
 
 from scrapy import Request
 from scrapy.spider import BaseSpider
-from rugby_scraper.items import Match, MatchStats, Team, Player, PlayerStats, GameEvent
-from rugby_scraper.loaders import MatchLoader, MatchStatsLoader, TeamLoader, PlayerLoader, PlayerStatsLoader, GameEventLoader
+from rugby_scraper.items import Match, MatchStats, Team, Player, PlayerStats, GameEvent, MatchExtraStats
+from rugby_scraper.loaders import MatchLoader, MatchStatsLoader, TeamLoader, PlayerLoader, PlayerStatsLoader, GameEventLoader, MatchExtraStatsLoader
 
 class MainSpider(BaseSpider):
     """main spider of the scraper that will get all the statistics from the different pages of the website http://stats.espnscrum.com"""
@@ -240,145 +240,104 @@ class MainSpider(BaseSpider):
                     raise RuntimeError ("could not find name")
 
 
-    def _parse_match_stats(self, info, team) :
-        """method that parses the Match stats tab of the match data
-        format : {"match_id" : "placeholder", "team_id" : "placeholder", "pens_attempt" : int, "drops_attempt" : int, "kicks" : int, "passes" : int, "runs" : int, "meters" : int, "def_beaten" : int, "offloads" : int, "rucks_init" : init , "rucks_won" : int , "mall_init" : int, "mall_won" : int, "turnovers" : int, "tackles_made" : int, "tackles_missed" : int, "scrums_won_on_feed" : int, "scrums_lost_on_feed" : int, "lineouts_won_on_throw" : "int, "lineouts_lost_on_throw" : int, }"""
+    def _parse_match_stats(self, tab, match) :
+        """"""
 
-        match_stats = {"match_id" : "placeholder", "team_id" : "placeholder"}
-        assert team in ["home", "away"] , "team to analyse must be either home or away"
-        DATA_LINE_SELECTOR = "table tr"
-        if not info.css(DATA_LINE_SELECTOR) :
-            return None
-        for data_line in info.css(DATA_LINE_SELECTOR) :
-            #selecting data_line title
-            title = data_line.css("td:nth-child(2)::text")
+        stats = tab.css("table tr")
+        if not stats:
+            self.logger.error("[{}] No data in \"Match stats\" tab, aborting.".format(match["match_id"]))
+            return
+
+        for stat in stats:
+            title = stat.css("td:nth-child(2)::text").extract_first()
             if not title:
                 continue
-            title = title.extract_first()
-            #selecting data_line value
-            if team == "home" :
-                VALUE_SELECTOR = "td:nth-child(1)::text"
-            else:
-                VALUE_SELECTOR = "td:nth-child(3)::text"
-            value = data_line.css(VALUE_SELECTOR)
-            if not value:
+            values = [stat.css("td:nth-child({})::text".format(i)).extract_first() for i in [1, 3]]
+            ids = [match["home_team_id"], match["away_team_id"]]
+            if not all(values):
                 continue
-            value = value.extract_first()
+            result = defaultdict(dict)
 
-            #analysing the data itself
-            #attempted penalties
-            if title == "Penalty goals":
-                cons_attempt_re = regex.match("[0-9]+ from ([0-9]+)", value)
-                if not cons_attempt_re :
-                    continue
-                cons_attempt = int(cons_attempt_re.captures(1)[0])
-                match_stats["pens_attempt"] = cons_attempt
-            #attempted drops
-            if title == "Dropped goals":
-                drops_re = regex.match("([0-9]+)( \(([0-9]+) missed\))?", value)
-                if not drops_re:
-                    continue
-                drops_scored = int(drops_re.captures(1)[0])
-                drops_missed = drops_re.captures(3)
-                if not drops_missed:
-                    drops_missed = 0
-                else:
-                    drops_missed = int(drops_missed[0])
-                drops_attempt = drops_scored + drops_missed
-                match_stats["drops_attempt"] = drops_attempt
-            #kicks from hand
-            if title == "Kicks from hand":
-                kicks = int(value)
-                match_stats["kicks"] = kicks
-            #passes
-            if title == "Passes":
-                passes = int(value)
-                match_stats["passes"] = passes
-            #runs
-            if title == "Runs":
-                runs = int(value)
-                match_stats["runs"] = runs
-            #meters run with ball
-            if title == "Metres run with ball":
-                meters = int(value)
-                match_stats["meters"] = meters
-            #clean breacks
-            if title == "Clean breaks":
-                breaks = int(value)
-                match_stats["breaks"] = breaks
-            #defenders beaten
-            if title == "Defenders beaten":
-                def_beaten = int(value)
-                match_stats["def_beaten"] = def_beaten
-            #Offloads
-            if title == "Offloads":
-                offloads = int(value)
-                match_stats["offloads"] = offloads
-            #rucks both initiated and won
-            if title == "Rucks won":
-                rucks_re = regex.match("^\\n([0-9]+) from ([0-9]+)", value)
-                if not rucks_re :
-                    continue
-                rucks_init = int(rucks_re.captures(2)[0])
-                match_stats["rucks_init"] = rucks_init
-                rucks_won = int(rucks_re.captures(1)[0])
-                match_stats["rucks_won"] = rucks_won
-            #mauls both initiated and won
-            if title == "Mauls won":
-                mall_re = regex.match("^\\n([0-9]+) from ([0-9]+)", value)
-                if not mall_re :
-                    continue
-                mall_init = int(mall_re.captures(2)[0])
-                match_stats["mall_init"] = mall_init
-                mall_won = int(mall_re.captures(1)[0])
-                match_stats["mall_won"] = mall_won
-            #turnovers
-            if title == "Turnovers conceded":
-                turnovers = int(value)
-                match_stats["turnovers"] = turnovers
-            #tackles
-            if title == "Tackles made/missed":
-                tackles_re = regex.match("^([0-9]+)/([0-9]+)$", value)
-                if not tackles_re :
-                    continue
-                tackles_made = int(tackles_re.captures(1)[0])
-                match_stats["tackles_made"] = tackles_made
-                tackles_missed = int(tackles_re.captures(2)[0])
-                match_stats["tackles_missed"] = tackles_missed
-            #scrums
-            if title == "Scrums on own feed":
-                scrums_re = regex.match("^\\n\\t  ([0-9]+) won, ([0-9]+) lost", value)
-                if not scrums_re:
-                    continue
-                scrums_won_on_feed = int(scrums_re.captures(1)[0])
-                match_stats["scrums_won_on_feed"] = scrums_won_on_feed
-                scrums_lost_on_feed = int(scrums_re.captures(2)[0])
-                match_stats["scrums_lost_on_feed"] = scrums_lost_on_feed
-            #lineouts
-            if title == "Lineouts on own throw":
-                lineout_re = regex.match("^\\n\\t  ([0-9]+) won, ([0-9]+) lost", value)
-                if not lineout_re:
-                    continue
-                lineouts_won_on_throw = int(lineout_re.captures(1)[0])
-                match_stats["lineouts_won_on_throw"] = lineouts_won_on_throw
-                lineouts_lost_on_throw = int(lineout_re.captures(2)[0])
-                match_stats["lineouts_lost_on_throw"] = lineouts_lost_on_throw
-            #penalties
-            if title == "Penalties conceded":
-                penalties = int(value)
-                match_stats["penalties"] = penalties
-            #cards
-            if title == "Yellow/red cards":
-                cards_re = regex.match("^([0-9]+)/([0-9]+)$", value)
-                if not cards_re:
-                    continue
-                yellow_cards = int(cards_re.captures(1)[0])
-                match_stats["yellow_cards"] = yellow_cards
-                red_cards = int(cards_re.captures(2)[0])
-                match_stats["red_cards"] = red_cards
+            for team_id, value in zip(ids, values):
+                # Analysing the data itself
+                if title == "Penalty goals":
+                    cons_attempt_re = regex.match("[0-9]+ from ([0-9]+)", value)
+                    if not cons_attempt_re:
+                        continue
+                    result["pens_attempt"][team_id] = int(cons_attempt_re.captures(1)[0])
+                # Attempted drops
+                if title == "Dropped goals":
+                    drops_re = regex.match("([0-9]+)( \(([0-9]+) missed\))?", value)
+                    if not drops_re:
+                        continue
+                    drops_scored = int(drops_re.captures(1)[0])
+                    drops_missed = drops_re.captures(3)
+                    if not drops_missed:
+                        drops_missed = 0
+                    else:
+                        drops_missed = int(drops_missed[0])
+                    drops_attempt = drops_scored + drops_missed
+                    result["drops_attempt"][team_id] = drops_attempt
+                # Various metrics
+                codes = {
+                    "Kicks from hand": "kicks",
+                    "Passes": "passes",
+                    "Runs": "runs",
+                    "Metres run with ball": "meters",
+                    "Clean breaks": "breaks",
+                    "Defenders beaten": "def_beaten",
+                    "Offloads": "offloads",
+                    "Turnovers conceded": "turnovers",
+                    "Penalties conceded": "pens_conceeded",
+                }
+                if title in ["Kicks from hand", "Passes", "Runs", "Metres run with ball", "Clean breaks", "Defenders beaten", "Offloads", "Turnovers conceded", "Penalties conceded"]:
+                    result[codes.get(title)][team_id] = int(value)
+                # Rucks both initiated and won
+                if title == "Rucks won":
+                    rucks_re = regex.match("^\\n([0-9]+) from ([0-9]+)", value)
+                    if not rucks_re:
+                        continue
+                    result["rucks_init"][team_id] = int(rucks_re.captures(2)[0])
+                    result["rucks_won"][team_id] = int(rucks_re.captures(1)[0])
+                #mauls both initiated and won
+                if title == "Mauls won":
+                    mall_re = regex.match("^\\n([0-9]+) from ([0-9]+)", value)
+                    if not mall_re :
+                        continue
+                    result["mall_init"][team_id] = int(mall_re.captures(2)[0])
+                    result["mall_won"][team_id] = int(mall_re.captures(1)[0])
+                #tackles
+                if title == "Tackles made/missed":
+                    tackles_re = regex.match("^([0-9]+)/([0-9]+)$", value)
+                    if not tackles_re :
+                        continue
+                    result["tackles_made"][team_id] = int(tackles_re.captures(1)[0])
+                    result["tackles_missed"][team_id] = int(tackles_re.captures(2)[0])
+                #scrums
+                if title == "Scrums on own feed":
+                    scrums_re = regex.match("^\\n\\t  ([0-9]+) won, ([0-9]+) lost", value)
+                    if not scrums_re:
+                        continue
+                    result["scrums_won_on_feed"][team_id] = int(scrums_re.captures(1)[0])
+                    result["scrums_lost_on_feed"][team_id] = int(scrums_re.captures(2)[0])
+                #lineouts
+                if title == "Lineouts on own throw":
+                    lineout_re = regex.match("^\\n\\t  ([0-9]+) won, ([0-9]+) lost", value)
+                    if not lineout_re:
+                        continue
+                    result["lineouts_won_on_throw"][team_id] = int(lineout_re.captures(1)[0])
+                    result["lineouts_lost_on_throw"][team_id] = int(lineout_re.captures(2)[0])
+                #cards
+                if title == "Yellow/red cards":
+                    cards_re = regex.match("^([0-9]+)/([0-9]+)$", value)
+                    if not cards_re:
+                        continue
+                    result["yellow_cards"][team_id] = int(cards_re.captures(1)[0])
+                    result["red_cards"][team_id] = int(cards_re.captures(2)[0])
 
+            for metric_name, metric_values in result.items():
+                yield metric_name, metric_values
 
-        return match_stats
 
     def _parse_player_stats(self, row, potential_team, potential_team_id ):
         """method that parses players match stats from row,
@@ -549,7 +508,7 @@ class MainSpider(BaseSpider):
             # For each team group (first team or replacements)
             for position, group in enumerate(team.xpath("table")):
                 # For each player (discard first rows - subtitles)
-                players = team.css("tr.liveTblRowWht")[1:]
+                players = group.css("tr.liveTblRowWht")[1:]
                 for player in players:
                     # Get basic info
                     player_loader = PlayerLoader(item = Player(), response = response, selector = player)
@@ -561,7 +520,7 @@ class MainSpider(BaseSpider):
                         continue
 
                     # Go to the player page to scrape it
-                    yield player_info
+                    #yield player_info
                     # yield response.follow(
                     #     url = "/statsguru/rugby/player/{}.html".format(player_info["player_id"]),
                     #     callback = self.player_info_parse,
@@ -583,7 +542,7 @@ class MainSpider(BaseSpider):
                         player_stats_loader.add_css(field, selector)
                     player_stats = player_stats_loader.load_item()
 
-                    yield player_stats
+                    #yield player_stats
                     # Experimental : go to the match list of the player to retrieve match stats (pens/cons/tries/drops)
                     # yield response.follow(
                     #     url = "/statsguru/rugby/player/{}.html?{}".format(player_info["player_id"], self._generate_query_string(self.player_params)),
@@ -675,7 +634,7 @@ class MainSpider(BaseSpider):
                                 loader.add_value("action_type", event_type.lower())
                                 game_event = loader.load_item()
                                 self.logger.info("[{}] ({}) Event : {} ({}) at time {}\"".format(game_event["match_id"], game_event["action_type"], name[0], game_event["player_id"], game_event["time"]))
-                                yield game_event
+                                #yield game_event
 
                         player_scores[player_id][event_type.lower()] += max(len(occurences)+1, len(times))
 
@@ -691,22 +650,24 @@ class MainSpider(BaseSpider):
                         loader.add_value(stat_name, stat_value)
                     player_stats = loader.load_item()
                     self.logger.info("[{}] Stats for {} ({}) : {}".format(match["match_id"], name[0], player_id, player_score))
-                    yield player_stats
+                    #yield player_stats
 
-        #
-        # # Analysing the rest of the tabs in the match page
-        # if "Match stats" in tabs:
-        #     home_match_stats = self._parse_match_stats(tabs["Match stats"], team = "home")
-        #     if home_match_stats:
-        #         home_match_stats["match_id"] = match["match_id"]
-        #         home_match_stats["team_id"] = match["home_team_id"]
-        #         yield {"match_stat_data" : home_match_stats}
-        #
-        #     away_match_stats = self._parse_match_stats(tabs["Match stats"], team = "away")
-        #     if away_match_stats:
-        #         away_match_stats["match_id"] = match["match_id"]
-        #         away_match_stats["team_id"] = match["away_team_id"]
-        #         yield {"match_stat_data" : away_match_stats}
+
+        # Analysing the rest of the tabs in the match page
+        if "Match stats" in tabs:
+            loaders = {
+                match["home_team_id"]: MatchExtraStatsLoader(item = MatchExtraStats()),
+                match["away_team_id"]: MatchExtraStatsLoader(item = MatchExtraStats())
+            }
+            for metric, scores in self._parse_match_stats(tabs["Match stats"], match):
+                for team_id, score in scores.items():
+                    loaders[team_id].add_value(metric, score)
+
+            for team_id, loader in loaders.items():
+                loader.add_value("match_id", match["match_id"])
+                loader.add_value("team_id", team_id)
+                yield loader.load_item()
+
         #
         # # if "Timeline" in tabs:
         # #     pass

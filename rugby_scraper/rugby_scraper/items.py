@@ -29,6 +29,35 @@ class MatchStats(Item):
     penalties = Field()
     drops = Field()
 
+class MatchExtraStats(Item):
+    """Data structure to store extended match stats"""
+
+    match_id = Field()
+    team_id = Field()
+    pens_attempt = Field()
+    pens_conceeded = Field()
+    drops_attempt = Field()
+    kicks = Field()
+    passes = Field()
+    runs = Field()
+    meters = Field()
+    breaks = Field()
+    def_beaten = Field()
+    offloads = Field()
+    rucks_init = Field()
+    rucks_won = Field()
+    mall_init = Field()
+    mall_won = Field()
+    turnovers = Field()
+    tackles_made = Field()
+    tackles_missed = Field()
+    scrums_won_on_feed = Field()
+    scrums_lost_on_feed = Field()
+    lineouts_won_on_throw = Field()
+    lineouts_lost_on_throw = Field()
+    yellow_cards = Field()
+    red_cards = Field()
+
 class Team(Item):
     """Data structure to store basic team info"""
 
@@ -56,6 +85,36 @@ class PlayerStats(Item):
     cons = Field()
     pens = Field()
     drops = Field()
+
+class PlayerExtraStats(Item):
+    """Data structure to store extended match stats"""
+
+    player_id = Field()
+    team_id = Field()
+    match_id = Field()
+    pens_attempt = Field()
+    pens_conceeded = Field()
+    drops_attempt = Field()
+    kicks = Field()
+    passes = Field()
+    runs = Field()
+    meters = Field()
+    breaks = Field()
+    def_beaten = Field()
+    offloads = Field()
+    rucks_init = Field()
+    rucks_won = Field()
+    mall_init = Field()
+    mall_won = Field()
+    turnovers = Field()
+    tackles_made = Field()
+    tackles_missed = Field()
+    scrums_won_on_feed = Field()
+    scrums_lost_on_feed = Field()
+    lineouts_won_on_throw = Field()
+    lineouts_lost_on_throw = Field()
+    yellow_cards = Field()
+    red_cards = Field()
 
 class GameEvent(Item):
     """Data structure to store game events (tries, penalties, etc.)"""
