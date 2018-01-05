@@ -1,10 +1,10 @@
 import re
 import regex
 from urllib.parse import urljoin
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 from scrapy import Request
-from scrapy.spider import BaseSpider
+from scrapy.spiders import BaseSpider
 from rugby_scraper.items import Match, MatchStats, Team, Player, PlayerStats, GameEvent, MatchExtraStats, PlayerExtraStats
 from rugby_scraper.loaders import MatchLoader, MatchStatsLoader, TeamLoader, PlayerLoader, PlayerStatsLoader, GameEventLoader, MatchExtraStatsLoader, PlayerExtraStatsLoader
 
@@ -19,19 +19,19 @@ class MainSpider(BaseSpider):
     follow_pages = False
     start_domain = "http://stats.espnscrum.com/"
     search_path = "/statsguru/rugby/stats/index.html"
-    search_params = {
-        "class": 1, # ?,
-        "home_or_away": 1, # Only returns home team entries
-        "orderby": "date",
-        "orderbyad": "reverse",
-        "page": 1,
-        "size": 200, # Results per page
-        "spanmin1": "24+Jul+1992", # Lower bound date
-        "spanval1": "span", # ?
-        "template": "results",
-        "type": "team",
-        "view": "match",
-    }
+    search_params = OrderedDict([
+        ("class", 1), # ?,
+        ("home_or_away", 1), # Only returns home team entries
+        ("orderby", "date"),
+        ("orderbyad", "reverse"),
+        ("page", 1),
+        ("size", 200), # Results per page
+        ("spanmin1", "24+Jul+1992"), # Lower bound date
+        ("spanval1", "span"), # ?
+        ("template", "results"),
+        ("type", "team"),
+        ("view", "match"),
+    ])
 
     player_params = {
         "class": 1, # ?,

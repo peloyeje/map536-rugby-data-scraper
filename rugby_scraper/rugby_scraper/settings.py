@@ -14,7 +14,7 @@ BOT_NAME = 'rugby_scraper'
 SPIDER_MODULES = ['rugby_scraper.spiders']
 NEWSPIDER_MODULE = 'rugby_scraper.spiders'
 
-LOG_LEVEL = 'INFO'
+#LOG_LEVEL = 'INFO'
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'rugby_scraper (+http://www.yourdomain.com)'
 
