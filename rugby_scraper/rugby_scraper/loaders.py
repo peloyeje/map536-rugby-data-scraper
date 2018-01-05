@@ -35,3 +35,9 @@ class PlayerStatsLoader(ItemLoader):
     player_id_in = MapCompose(int)
     number_in = MapCompose(int)
     position_in = MapCompose(lambda x: x.upper())
+
+class GameEventLoader(ItemLoader):
+    default_input_processor = MapCompose(int)
+    default_output_processor = TakeFirst()
+
+    action_type_in = MapCompose(lambda x: x if x in ["tries", "pens", "cons", "drops"] else None)

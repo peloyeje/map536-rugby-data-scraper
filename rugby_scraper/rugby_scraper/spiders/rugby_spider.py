@@ -1,11 +1,12 @@
 import re
 import regex
 from urllib.parse import urljoin
+from collections import defaultdict
 
 from scrapy import Request
 from scrapy.spider import BaseSpider
-from rugby_scraper.items import Match, MatchStats, Team, Player, PlayerStats
-from rugby_scraper.loaders import MatchLoader, MatchStatsLoader, TeamLoader, PlayerLoader, PlayerStatsLoader
+from rugby_scraper.items import Match, MatchStats, Team, Player, PlayerStats, GameEvent
+from rugby_scraper.loaders import MatchLoader, MatchStatsLoader, TeamLoader, PlayerLoader, PlayerStatsLoader, GameEventLoader
 
 class MainSpider(BaseSpider):
     """main spider of the scraper that will get all the statistics from the different pages of the website http://stats.espnscrum.com"""
@@ -22,6 +23,7 @@ class MainSpider(BaseSpider):
         "class": 1, # ?,
         "home_or_away": 1, # Only returns home team entries
         "orderby": "date",
+        "orderbyad": "reverse",
         "page": 1,
         "size": 200, # Results per page
         "spanmin1": "24+Jul+1992", # Lower bound date
@@ -156,8 +158,9 @@ class MainSpider(BaseSpider):
                     loader.add_css("name", "tr.data1:nth-child({}) {}".format(index - offset, selector))
                     #yield loader.load_item()
 
+
         # Get next page link and follow it if there is still data to process
-        if follow_pages:
+        if self.follow_pages:
             if links:
                 page = response.meta["page"] + 1
                 for i in [1, 2]: # Get home matches then away matches
@@ -210,7 +213,7 @@ class MainSpider(BaseSpider):
             if researched_name_list[-1] in player_name_list[-1] :
                 potential.append(player_id)
         if len(potential) == 0 :
-            raise RuntimeError ("no name was detected")
+            raise RuntimeError("no name was detected")
         elif len(potential) == 1 :
             return potential[0]
         else:
@@ -236,70 +239,6 @@ class MainSpider(BaseSpider):
                         return final[0]
                     raise RuntimeError ("could not find name")
 
-
-
-    def _get_team_dics_from_info(self, info):
-        """method that get the teams dicts from the info"""
-        #home team
-        HOME_PLAYER_ROW = "table tr td:nth-child(1) div table tr"
-        #if the team tables are present we proceed
-        if not info.css(HOME_PLAYER_ROW):
-            #if the home team tables are not present we skip to the next information source in the page
-            return None
-
-        players_row = info.css(HOME_PLAYER_ROW)
-        PLAYER_NUMBER_SELECTOR = "td:nth-child(1)::text"
-        PLAYER_POS_SELECTOR = "td:nth-child(2)::text"
-        PLAYER_NAME_SELECTOR = "td:nth-child(3) table a::text"
-        PLAYER_URL_SELECTOR = "td:nth-child(3) table a::attr(href)"
-        home_team_player_dic = {}
-        for player_row in players_row:
-            player_number = player_row.css(PLAYER_NUMBER_SELECTOR).extract_first()
-            player_position = player_row.css(PLAYER_POS_SELECTOR).extract_first()
-            player_name = player_row.css(PLAYER_NAME_SELECTOR).extract_first()
-            if not player_row.css(PLAYER_URL_SELECTOR).extract_first() :
-                #if player url not found, we skip to next player
-                continue
-            player_url = player_row.css(PLAYER_URL_SELECTOR).extract_first()
-            #INSERT PLAYER PAGE SCRAPING LINK
-            player_id_re = re.search("^[\D\-_.:]+/(\d+).html$", player_url)
-
-            #checking that we are selecting a valid player row
-            if not player_id_re :
-                #if player has no id in url, we skip to next player
-                continue
-            assert len(player_id_re.groups()) == 1 , "found more than one player id in url"
-            player_id = int(player_id_re.group(1))
-            home_team_player_dic[player_id] = (player_name, player_position, player_number)
-
-        #away team
-        AWAY_PLAYER_ROW = "table tr td:nth-child(2) div table tr"
-        #if the team tables are present we proceed
-        if not info.css(AWAY_PLAYER_ROW):
-            #if the away team tables are not present we skip to the next information source in the page
-            return None
-        players_row = info.css(AWAY_PLAYER_ROW)
-        away_team_player_dic = {}
-        for player_row in players_row:
-            player_number = player_row.css(PLAYER_NUMBER_SELECTOR).extract_first()
-            player_position = player_row.css(PLAYER_POS_SELECTOR).extract_first()
-            player_name = player_row.css(PLAYER_NAME_SELECTOR).extract_first()
-            if not player_row.css(PLAYER_URL_SELECTOR).extract_first() :
-                #if player url not found, we skip to next player
-                continue
-            player_url = player_row.css(PLAYER_URL_SELECTOR).extract_first()
-            #INSERT PLAYER PAGE SCRAPING LINK
-            player_id_re = re.search("^[\D\-_.:]+/(\d+).html$", player_url)
-
-            #checking that we are selecting a valid player row
-            if not player_id_re :
-                #if player has no id in url, we skip to next player
-                continue
-            assert len(player_id_re.groups()) == 1 , "found more than one player id in url"
-            player_id = int(player_id_re.group(1))
-            away_team_player_dic[player_id] = (player_name, player_position, player_number)
-
-        return (home_team_player_dic, away_team_player_dic)
 
     def _parse_match_stats(self, info, team) :
         """method that parses the Match stats tab of the match data
@@ -839,8 +778,9 @@ class MainSpider(BaseSpider):
         if "Teams" not in tabs:
             return # We ain't gonna do nothin' bru
 
-        # LEGACY : create dict to match _parse_teams_score_data inputs
+        # Create players dict to match _parse_teams_score_data inputs
         player_dict = { "home": {}, "away": {}}
+
         # For each team
         teams = tabs["Teams"].css("table tr:last-child .divTeams")
         for index, team in enumerate(teams):
@@ -887,39 +827,116 @@ class MainSpider(BaseSpider):
                     #     meta = { "player_stats": player_stats }
                     # )
 
-                    # LEGACY : populate dict
-                    player_dict["home" if index == 0 else "away"][player_info["player_id"]] = (player_info["name"], player_stats.get("position"), player_stats.get("number"))
+                    # Populate player dict for later use
+                    if player_info["player_id"] and player_info["name"]:
+                        player_dict["home" if index == 0 else "away"][player_info["player_id"]] = (player_info.get("name"), player_stats.get("position"), player_stats.get("number"))
 
         # Abort parsing if we don't have info on players
         if not player_dict["home"] or not player_dict["away"]:
             return
 
-        # 3) Parse top summary to retrieve the names of the players who scored
-        event_score_results = self._parse_teams_score_data(tabs["Teams"], player_dict, match)
-        for event_score in event_score_results:
-            if not event_score:
-                continue
-            yield event_score
+        # 3) Parse top summary of the Teams tab to retrieve the names of the players who scored
+        scores = tabs["Teams"].css(".liveTblScorers")
+        if scores and len(scores) > 1:
+            # Everything is pretty all right' man
+            # For each team (home and away)
+            for index in range(2):
+                player_scores = defaultdict(lambda: defaultdict(int))
+                for score in scores[index::2]:
+                    # Extract from html
+                    fields = (score.css(".liveTblTextGrn::text").extract_first(), score.css("td::text").extract_first())
+                    if not all(fields):
+                        self.logger.debug("Match {} dismissed, not all fields present", match["match_id"])
+                        continue
+                    # Format the parsed data
+                    event_type, event_data = [item.rstrip().replace("\n", "") for item in fields]
+                    if event_data == "none":
+                        self.logger.debug("[{}] No data for event type \"{}\"".format(match["match_id"], event_type))
+                        continue
 
-        # Analysing the rest of the tabs in the match page
-        if "Match stats" in tabs:
-            home_match_stats = self._parse_match_stats(tabs["Match stats"], team = "home")
-            if home_match_stats:
-                home_match_stats["match_id"] = match["match_id"]
-                home_match_stats["team_id"] = match["home_team_id"]
-                yield {"match_stat_data" : home_match_stats}
+                    # Do the regex matching
+                    # First, split the event string to get each player separately
+                    list_of_events = regex.match("^(([\w\- ]+[\d ]*(\([\d, ]+\))*),?)+", event_data)
+                    if not list_of_events:
+                        self.logger.debug("[{}] ({}) Can't extract player names for string \"{}\"".format(match["match_id"], event_type, event_data))
+                        continue
 
-            away_match_stats = self._parse_match_stats(tabs["Match stats"], team = "away")
-            if away_match_stats:
-                away_match_stats["match_id"] = match["match_id"]
-                away_match_stats["team_id"] = match["away_team_id"]
-                yield {"match_stat_data" : away_match_stats}
+                    # Cleaning of trailing spaces
+                    list_of_events = [item.strip() for item in list_of_events.captures(2)]
+                    self.logger.debug(list_of_events)
 
-        # if "Timeline" in tabs:
-        #     pass
-        for tab in { title: tabs[title] for title in tabs.keys() if re.search("^[a-zA-Z ]+ stats$", title) }:
-            for player_row in tab.css("table tr") :
-                player_stats = self._parse_player_stats(player_row, potential_team = [player_dict["home"], player_dict["away"]], potential_team_id = [match["home_team_id"], match["away_team_id"]])
-                if player_stats :
-                    player_stats["match_id"] = match["match_id"]
-                    yield {"player_stats" : player_stats}
+                    # For each event (corresponding to one player), parse the info
+                    # and yield the data structure
+                    for event in list_of_events:
+                        event_parsed = regex.match("^([\w\-]+) *([\d ])*(?:\((?:(\d+)[, ]*)*\))*", event)
+                        if not event_parsed:
+                            self.logger.debug("[{}] ({}) Parsing failed for string \"{}\"".format(match["match_id"], event_type, event))
+                            continue
+
+                        name = event_parsed.captures(1)
+                        occurences = event_parsed.captures(2)
+                        times = event_parsed.captures(3)
+
+                        if len(name) == 0:
+                            # Can't do anything without a name bru'
+                            continue
+
+                        # Attempt to guess the player id
+                        try :
+                            player_id = self._get_player_id_from_name(name[0], player_dict["home" if index == 0 else "away"])
+                        except RuntimeError:
+                            # Drop game events that can't be associated to a player
+                            continue
+
+                        if times:
+                            for time in times:
+                                # We have some game events to emit
+                                loader = GameEventLoader(item = GameEvent(), response = response)
+                                loader.add_value("player_id", player_id)
+                                player_stats_loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
+                                loader.add_value("match_id", match["match_id"])
+                                loader.add_value("time", time)
+                                loader.add_value("action_type", event_type.lower())
+                                game_event = loader.load_item()
+                                self.logger.info("[{}] {} > {} ({}) at time {}\"".format(game_event["match_id"], game_event["action_type"], name[0], game_event["player_id"], game_event["time"]))
+                                #yield game_event
+
+                        player_scores[player_id][event_type.lower()] += max(len(occurences)+1, len(times))
+
+                # Once we've processed all the scores for a given team, we yield
+                # the corresponding data structures
+                for player_id, player_score in player_scores.items():
+                    loader = PlayerStatsLoader(item = PlayerStats(), response = response)
+                    loader.add_value("player_id", player_id)
+                    loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
+                    loader.add_value("match_id", match["match_id"])
+                    loader.add_value("player_id", player_id)
+                    for stat_name, stat_value in player_score.items():
+                        loader.add_value(stat_name, stat_value)
+                    player_stats = loader.load_item()
+                    yield player_stats
+
+        #
+        # # Analysing the rest of the tabs in the match page
+        # if "Match stats" in tabs:
+        #     home_match_stats = self._parse_match_stats(tabs["Match stats"], team = "home")
+        #     if home_match_stats:
+        #         home_match_stats["match_id"] = match["match_id"]
+        #         home_match_stats["team_id"] = match["home_team_id"]
+        #         yield {"match_stat_data" : home_match_stats}
+        #
+        #     away_match_stats = self._parse_match_stats(tabs["Match stats"], team = "away")
+        #     if away_match_stats:
+        #         away_match_stats["match_id"] = match["match_id"]
+        #         away_match_stats["team_id"] = match["away_team_id"]
+        #         yield {"match_stat_data" : away_match_stats}
+        #
+        # # if "Timeline" in tabs:
+        # #     pass
+        #
+        # for tab in { title: tabs[title] for title in tabs.keys() if re.search("^[a-zA-Z ]+ stats$", title) }:
+        #     for player_row in tab.css("table tr") :
+        #         player_stats = self._parse_player_stats(player_row, potential_team = [player_dict["home"], player_dict["away"]], potential_team_id = [match["home_team_id"], match["away_team_id"]])
+        #         if player_stats :
+        #             player_stats["match_id"] = match["match_id"]
+        #             yield {"player_stats" : player_stats}

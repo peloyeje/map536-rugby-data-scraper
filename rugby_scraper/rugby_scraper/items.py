@@ -53,8 +53,8 @@ class PlayerStats(Item):
     number = Field()
     first_team = Field()
     tries = Field()
-    conversions = Field()
-    penalties = Field()
+    cons = Field()
+    pens = Field()
     drops = Field()
 
 class GameEvent(Item):
