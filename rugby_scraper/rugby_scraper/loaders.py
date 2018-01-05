@@ -40,6 +40,10 @@ class PlayerStatsLoader(ItemLoader):
     number_in = MapCompose(int)
     position_in = MapCompose(lambda x: x.upper())
 
+class PlayerExtraStatsLoader(ItemLoader):
+    default_input_processor = MapCompose(int)
+    default_output_processor = TakeFirst()
+
 class GameEventLoader(ItemLoader):
     default_input_processor = MapCompose(int)
     default_output_processor = TakeFirst()
