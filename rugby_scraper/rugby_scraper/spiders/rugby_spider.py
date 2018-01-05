@@ -145,7 +145,7 @@ class MainSpider(BaseSpider):
             match_stats = loader.load_item()
 
             # Return it directly
-            #yield match_stats
+            yield match_stats
 
             ###
             # 3) Extract basic team profiles and create Team structures
@@ -156,7 +156,7 @@ class MainSpider(BaseSpider):
                     loader = TeamLoader(item = Team(), response = response)
                     loader.add_value("team_id", match.get("{}_id".format(team)))
                     loader.add_css("name", "tr.data1:nth-child({}) {}".format(index - offset, selector))
-                    #yield loader.load_item()
+                    yield loader.load_item()
 
 
         # Get next page link and follow it if there is still data to process
@@ -519,7 +519,7 @@ class MainSpider(BaseSpider):
                         continue
 
                     # Go to the player page to scrape it
-                    #yield player_info
+                    yield player_info
                     # yield response.follow(
                     #     url = "/statsguru/rugby/player/{}.html".format(player_info["player_id"]),
                     #     callback = self.player_info_parse,
@@ -541,7 +541,7 @@ class MainSpider(BaseSpider):
                         player_stats_loader.add_css(field, selector)
                     player_stats = player_stats_loader.load_item()
 
-                    #yield player_stats
+                    yield player_stats
                     # Experimental : go to the match list of the player to retrieve match stats (pens/cons/tries/drops)
                     # yield response.follow(
                     #     url = "/statsguru/rugby/player/{}.html?{}".format(player_info["player_id"], self._generate_query_string(self.player_params)),
@@ -560,112 +560,112 @@ class MainSpider(BaseSpider):
         self.logger.info("[{}] Found {} players for home team ({}) and {} players for away team ({})".format(match["match_id"], len(player_dict["home"]), match["home_team_id"], len(player_dict["away"]), match["away_team_id"]))
 
         # 3) Parse top summary of the Teams tab to retrieve the names of the players who scored
-        # self.logger.info("[{}] Begin score parsing ...".format(match["match_id"]))
-        # scores = tabs["Teams"].css(".liveTblScorers")
-        # if scores and len(scores) > 1:
-        #     # Everything is pretty all right' man
-        #     # For each team (home and away)
-        #     for index in range(2):
-        #         player_scores = defaultdict(lambda: defaultdict(int))
-        #         for score in scores[index::2]:
-        #             # Extract from html
-        #             fields = (score.css(".liveTblTextGrn::text").extract_first(), score.css("td::text").extract_first())
-        #             if not all(fields):
-        #                 self.logger.info("[{}] Skipping score entry, not all fields present. Skipping.", match["match_id"])
-        #                 continue
-        #
-        #             # Format the parsed data
-        #             event_type, event_data = [item.rstrip().replace("\n", "") for item in fields]
-        #             if not event_type.lower() in ["pens", "tries", "drops", "cons"]:
-        #                 # Event type not supported
-        #                 self.logger.info("[{}] Unsupported event \"{}\". Skipping.".format(match["match_id"], event_type))
-        #                 continue
-        #             self.logger.info("[{}] Handling event \"{}\" ...".format(match["match_id"], event_type))
-        #             if event_data == "none":
-        #                 self.logger.info("[{}] ({}) No data for event. Skipping.".format(match["match_id"], event_type))
-        #                 continue
-        #
-        #             # Do the regex matching
-        #             # First, split the event string to get each player separately
-        #             list_of_events = regex.match("^(([\w\- ]+[\d ]*(\([\d, ]+\))*),?)+", event_data)
-        #             if not list_of_events:
-        #                 self.logger.warning("[{}] ({}) Can't extract player actions. Skipping.".format(match["match_id"], event_type))
-        #                 self.logger.debug("String : {}".format(event_data))
-        #                 continue
-        #
-        #             # Cleaning of trailing spaces
-        #             list_of_events = [item.strip() for item in list_of_events.captures(2)]
-        #             self.logger.debug(list_of_events)
-        #
-        #             # For each event (corresponding to one player), parse the info
-        #             # and yield the data structure
-        #             for event in list_of_events:
-        #                 event_parsed = regex.match("^([\w\-]+) *([\d ])*(?:\((?:(\d+)[, ]*)*\))*", event)
-        #                 if not event_parsed:
-        #                     self.logger.warning("[{}] ({}) Action parsing failed. Skipping.".format(match["match_id"], event_type))
-        #                     self.logger.debug("String : {}".format(event))
-        #                     continue
-        #
-        #                 name = event_parsed.captures(1)
-        #                 occurences = event_parsed.captures(2)
-        #                 times = event_parsed.captures(3)
-        #
-        #                 if len(name) == 0:
-        #                     # Can't do anything without a name bru'
-        #                     continue
-        #
-        #                 # Attempt to guess the player id
-        #                 try :
-        #                     player_id = self._get_player_id_from_name(name[0], player_dict["home" if index == 0 else "away"])
-        #                 except RuntimeError:
-        #                     # Drop game events that can't be associated to a player
-        #                     self.logger.warning("[{}] ({}) Unable to guess player id for \"{}\". Skipping.".format(match["match_id"], event_type, name[0]))
-        #                     continue
-        #
-        #                 if times:
-        #                     for time in times:
-        #                         # We have some game events to emit
-        #                         loader = GameEventLoader(item = GameEvent(), response = response)
-        #                         loader.add_value("player_id", player_id)
-        #                         player_stats_loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
-        #                         loader.add_value("match_id", match["match_id"])
-        #                         loader.add_value("time", time)
-        #                         loader.add_value("action_type", event_type.lower())
-        #                         game_event = loader.load_item()
-        #                         self.logger.info("[{}] ({}) Event : {} ({}) at time {}\"".format(game_event["match_id"], game_event["action_type"], name[0], game_event["player_id"], game_event["time"]))
-        #                         #yield game_event
-        #
-        #                 player_scores[player_id][event_type.lower()] += max(len(occurences)+1, len(times))
-        #
-        #         # Once we've processed all the scores for a given team, we yield
-        #         # the corresponding data structures
-        #         for player_id, player_score in player_scores.items():
-        #             loader = PlayerStatsLoader(item = PlayerStats(), response = response)
-        #             loader.add_value("player_id", player_id)
-        #             loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
-        #             loader.add_value("match_id", match["match_id"])
-        #             loader.add_value("player_id", player_id)
-        #             for stat_name, stat_value in player_score.items():
-        #                 loader.add_value(stat_name, stat_value)
-        #             player_stats = loader.load_item()
-        #             self.logger.info("[{}] Stats for {} ({}) : {}".format(match["match_id"], name[0], player_id, player_score))
-        #             #yield player_stats
+        self.logger.info("[{}] Begin score parsing ...".format(match["match_id"]))
+        scores = tabs["Teams"].css(".liveTblScorers")
+        if scores and len(scores) > 1:
+            # Everything is pretty all right' man
+            # For each team (home and away)
+            for index in range(2):
+                player_scores = defaultdict(lambda: defaultdict(int))
+                for score in scores[index::2]:
+                    # Extract from html
+                    fields = (score.css(".liveTblTextGrn::text").extract_first(), score.css("td::text").extract_first())
+                    if not all(fields):
+                        self.logger.info("[{}] Skipping score entry, not all fields present. Skipping.", match["match_id"])
+                        continue
+
+                    # Format the parsed data
+                    event_type, event_data = [item.rstrip().replace("\n", "") for item in fields]
+                    if not event_type.lower() in ["pens", "tries", "drops", "cons"]:
+                        # Event type not supported
+                        self.logger.info("[{}] Unsupported event \"{}\". Skipping.".format(match["match_id"], event_type))
+                        continue
+                    self.logger.info("[{}] Handling event \"{}\" ...".format(match["match_id"], event_type))
+                    if event_data == "none":
+                        self.logger.info("[{}] ({}) No data for event. Skipping.".format(match["match_id"], event_type))
+                        continue
+
+                    # Do the regex matching
+                    # First, split the event string to get each player separately
+                    list_of_events = regex.match("^(([\w\- ]+[\d ]*(\([\d, ]+\))*),?)+", event_data)
+                    if not list_of_events:
+                        self.logger.warning("[{}] ({}) Can't extract player actions. Skipping.".format(match["match_id"], event_type))
+                        self.logger.debug("String : {}".format(event_data))
+                        continue
+
+                    # Cleaning of trailing spaces
+                    list_of_events = [item.strip() for item in list_of_events.captures(2)]
+                    self.logger.debug(list_of_events)
+
+                    # For each event (corresponding to one player), parse the info
+                    # and yield the data structure
+                    for event in list_of_events:
+                        event_parsed = regex.match("^([\w\-]+) *([\d ])*(?:\((?:(\d+)[, ]*)*\))*", event)
+                        if not event_parsed:
+                            self.logger.warning("[{}] ({}) Action parsing failed. Skipping.".format(match["match_id"], event_type))
+                            self.logger.debug("String : {}".format(event))
+                            continue
+
+                        name = event_parsed.captures(1)
+                        occurences = event_parsed.captures(2)
+                        times = event_parsed.captures(3)
+
+                        if len(name) == 0:
+                            # Can't do anything without a name bru'
+                            continue
+
+                        # Attempt to guess the player id
+                        try :
+                            player_id = self._get_player_id_from_name(name[0], player_dict["home" if index == 0 else "away"])
+                        except RuntimeError:
+                            # Drop game events that can't be associated to a player
+                            self.logger.warning("[{}] ({}) Unable to guess player id for \"{}\". Skipping.".format(match["match_id"], event_type, name[0]))
+                            continue
+
+                        if times:
+                            for time in times:
+                                # We have some game events to emit
+                                loader = GameEventLoader(item = GameEvent(), response = response)
+                                loader.add_value("player_id", player_id)
+                                player_stats_loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
+                                loader.add_value("match_id", match["match_id"])
+                                loader.add_value("time", time)
+                                loader.add_value("action_type", event_type.lower())
+                                game_event = loader.load_item()
+                                self.logger.info("[{}] ({}) Event : {} ({}) at time {}\"".format(game_event["match_id"], game_event["action_type"], name[0], game_event["player_id"], game_event["time"]))
+                                yield game_event
+
+                        player_scores[player_id][event_type.lower()] += max(len(occurences)+1, len(times))
+
+                # Once we've processed all the scores for a given team, we yield
+                # the corresponding data structures
+                for player_id, player_score in player_scores.items():
+                    loader = PlayerStatsLoader(item = PlayerStats(), response = response)
+                    loader.add_value("player_id", player_id)
+                    loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
+                    loader.add_value("match_id", match["match_id"])
+                    loader.add_value("player_id", player_id)
+                    for stat_name, stat_value in player_score.items():
+                        loader.add_value(stat_name, stat_value)
+                    player_stats = loader.load_item()
+                    self.logger.info("[{}] Stats for {} ({}) : {}".format(match["match_id"], name[0], player_id, player_score))
+                    yield player_stats
 
 
-        # # Analysing the rest of the tabs in the match page
-        # if "Match stats" in tabs:
-        #     loaders = {
-        #         match["home_team_id"]: MatchExtraStatsLoader(item = MatchExtraStats()),
-        #         match["away_team_id"]: MatchExtraStatsLoader(item = MatchExtraStats())
-        #     }
-        #     for metric, scores in self._parse_match_stats(tabs["Match stats"], match):
-        #         for team_id, score in scores.items():
-        #             loaders[team_id].add_value(metric, score)
-        #
-        #     for team_id, loader in loaders.items():
-        #         loader.add_value("match_id", match["match_id"])
-        #         loader.add_value("team_id", team_id)
-        #         yield loader.load_item()
+        # Analysing the rest of the tabs in the match page
+        if "Match stats" in tabs:
+            loaders = {
+                match["home_team_id"]: MatchExtraStatsLoader(item = MatchExtraStats()),
+                match["away_team_id"]: MatchExtraStatsLoader(item = MatchExtraStats())
+            }
+            for metric, scores in self._parse_match_stats(tabs["Match stats"], match):
+                for team_id, score in scores.items():
+                    loaders[team_id].add_value(metric, score)
+
+            for team_id, loader in loaders.items():
+                loader.add_value("match_id", match["match_id"])
+                loader.add_value("team_id", team_id)
+                yield loader.load_item()
 
 
         for index, tab in enumerate((tabs[title] for title in tabs.keys() if re.search("^[a-zA-Z ]+ stats$", title))):
