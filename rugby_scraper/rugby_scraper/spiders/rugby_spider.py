@@ -19,19 +19,6 @@ class MainSpider(BaseSpider):
     follow_pages = False
     start_domain = "http://stats.espnscrum.com/"
     search_path = "/statsguru/rugby/stats/index.html"
-    search_params = OrderedDict([
-        ("class", 1), # ?,
-        ("home_or_away", 1), # Only returns home team entries
-        ("orderby", "date"),
-        ("orderbyad", "reverse"),
-        ("page", 1),
-        ("size", 200), # Results per page
-        ("spanmin1", "24+Jul+1992"), # Lower bound date
-        ("spanval1", "span"), # ?
-        ("template", "results"),
-        ("type", "team"),
-        ("view", "match"),
-    ])
 
     player_params = {
         "class": 1, # ?,
@@ -39,6 +26,22 @@ class MainSpider(BaseSpider):
         "type": "player",
         "view": "match",
     }
+
+    def _generate_query_params(self, home_or_away = 1, page = 1):
+        search_params = OrderedDict([
+            ("class", 1), # ?,
+            ("home_or_away", home_or_away), # Only returns home team entries
+            ("orderby", "date"),
+            ("orderbyad", "reverse"),
+            ("page", page),
+            ("size", 200), # Results per page
+            ("spanmin1", "24+Jul+1992"), # Lower bound date
+            ("spanval1", "span"), # ?
+            ("template", "results"),
+            ("type", "team"),
+            ("view", "match"),
+        ])
+        return search_params
 
     def _generate_query_string(self, query_params):
         sep = ";"
@@ -50,7 +53,7 @@ class MainSpider(BaseSpider):
         return urljoin(domain, "{}?{}".format(path, query_string))
 
     def _generate_search_url(self, **params):
-        query_params = { **self.search_params, **params }
+        query_params = self._generate_query_params(**params)
         return self._generate_url(domain = self.start_domain, path = self.search_path, query_params = query_params)
 
     def start_requests(self):
@@ -64,12 +67,11 @@ class MainSpider(BaseSpider):
             yield Request(
                 url = self._generate_search_url(page = 1, home_or_away = i),
                 callback = self.match_list_parse,
-                meta = { "home_or_away": i, "page": 1 })
+                meta = { "home_or_away": i, "page": 1, "handle_httpstatus_list" : [301, 302, 303]})
 
     def match_list_parse(self, response):
         """
         """
-
         id_fields = {
             'match_id': 'li:nth-child(6) > a::attr(href)',
             'home_team_id': 'li:nth-child(3) > a::attr(href)',
