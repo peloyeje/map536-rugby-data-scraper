@@ -34,7 +34,7 @@ class MainSpider(BaseSpider):
             ("orderby", "date"),
             ("orderbyad", "reverse"),
             ("page", page),
-            ("size", 200), # Results per page
+            ("size", 50), # Results per page
             ("spanmin1", "24+Jul+1992"), # Lower bound date
             ("spanval1", "span"), # ?
             ("template", "results"),
@@ -654,7 +654,7 @@ class MainSpider(BaseSpider):
                                 # We have some game events to emit
                                 loader = GameEventLoader(item = GameEvent(), response = response)
                                 loader.add_value("player_id", player_id)
-                                player_stats_loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
+                                loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
                                 loader.add_value("match_id", match["match_id"])
                                 loader.add_value("time", time)
                                 loader.add_value("action_type", event_type.lower())
