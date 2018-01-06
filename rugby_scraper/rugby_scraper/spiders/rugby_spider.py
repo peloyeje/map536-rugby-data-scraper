@@ -74,8 +74,8 @@ class MainSpider(BaseSpider):
         """
         id_fields = {
             'match_id': 'li:nth-child(6) > a::attr(href)',
-            'home_team_id': 'li:nth-child(3) > a::attr(href)',
-            'away_team_id': 'li:nth-child(4) > a::attr(href)',
+            'left_team_id': 'li:nth-child(3) > a::attr(href)',
+            'right_team_id': 'li:nth-child(4) > a::attr(href)',
             'ground_id': 'li:nth-child(5) > a::attr(href)',
         }
 
@@ -116,7 +116,15 @@ class MainSpider(BaseSpider):
             # Subloader that handles the links in the side menu divs
             link_block_loader = loader.nested_css("#engine-dd{}".format(index - offset))
             for field, selector in id_fields.items():
+                if regex.match("^\D+_team_id$", field):
+                    continue
                 link_block_loader.add_css(field, selector, re = "\/([0-9]+)\.")
+            #inverting the team ids if the home_or_away is two
+            left_field = "home_team_id" if response.meta["home_or_away"] == 1 else "away_team_id"
+            link_block_loader.add_css(left_field, id_fields["left_team_id"], re = "\/([0-9]+)\.")
+            right_field = "home_team_id" if response.meta["home_or_away"] == 2 else "away_team_id"
+            link_block_loader.add_css(right_field, id_fields["right_team_id"], re = "\/([0-9]+)\.")
+
             # Subloader that handles the match info in the table rows (won, date)
             # We only have to get this info for the home team iteration, as they are mirrored for the away team
             if response.meta["home_or_away"] == 1:
@@ -125,7 +133,6 @@ class MainSpider(BaseSpider):
                     table_row_loader.add_css(field, selector)
             # Fetch the data
             match = loader.load_item()
-
             # Follow each match link to get additional info (player stats, etc.)
             # Scrapy will follow this link only for the first occurence of the match id so we avoid duplicates
             yield match
