@@ -6,7 +6,7 @@ from scrapy.loader.processors import TakeFirst, MapCompose, Compose
 
 def missing_values(entry):
     tokens = str(entry).split(" ")
-    banned = ["-", "unknown"]
+    banned = ["-", "unknown", "circa"]
 
     if any((token in banned for token in tokens)):
         return None
