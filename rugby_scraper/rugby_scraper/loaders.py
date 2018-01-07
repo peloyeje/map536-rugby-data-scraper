@@ -38,7 +38,7 @@ class PlayerLoader(ItemLoader):
     default_output_processor = TakeFirst()
 
     player_id_in = MapCompose(int)
-    birthday_in = MapCompose(lambda x: arrow.get(x, "MMMM D, YYYY", locale = "en_us"))
+    birthday_in = MapCompose(missing_values, lambda x: arrow.get(x, "MMMM D, YYYY", locale = "en_us"))
     birthday_out = Compose(lambda x: x[0].isoformat())
 
 class PlayerStatsLoader(ItemLoader):

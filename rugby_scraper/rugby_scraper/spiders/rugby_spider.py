@@ -70,7 +70,8 @@ class MainSpider(BaseSpider):
                 meta = { "home_or_away": i, "page": 1, "handle_httpstatus_list" : [301, 302, 303]})
 
     def match_list_parse(self, response):
-        """
+        """ Callback that handles the parsing and processing of the match list table.
+        Returns : Match() item, MatchStats() item, Team() item
         """
         id_fields = {
             'match_id': 'li:nth-child(6) > a::attr(href)',
@@ -116,14 +117,11 @@ class MainSpider(BaseSpider):
             # Subloader that handles the links in the side menu divs
             link_block_loader = loader.nested_css("#engine-dd{}".format(index - offset))
             for field, selector in id_fields.items():
-                if regex.match("^\D+_team_id$", field):
-                    continue
+                if field == "left_team_id":
+                    field = "home_team_id" if response.meta["home_or_away"] == 1 else "away_team_id"
+                if field == "right_team_id":
+                    field = "home_team_id" if response.meta["home_or_away"] == 2 else "away_team_id"
                 link_block_loader.add_css(field, selector, re = "\/([0-9]+)\.")
-            #inverting the team ids if the home_or_away is two
-            left_field = "home_team_id" if response.meta["home_or_away"] == 1 else "away_team_id"
-            link_block_loader.add_css(left_field, id_fields["left_team_id"], re = "\/([0-9]+)\.")
-            right_field = "home_team_id" if response.meta["home_or_away"] == 2 else "away_team_id"
-            link_block_loader.add_css(right_field, id_fields["right_team_id"], re = "\/([0-9]+)\.")
 
             # Subloader that handles the match info in the table rows (won, date)
             # We only have to get this info for the home team iteration, as they are mirrored for the away team
@@ -131,16 +129,19 @@ class MainSpider(BaseSpider):
                 table_row_loader = loader.nested_css("tr.data1:nth-child({})".format(index - offset))
                 for field, selector in meta_fields.items():
                     table_row_loader.add_css(field, selector)
+
             # Fetch the data
             match = loader.load_item()
-            # Follow each match link to get additional info (player stats, etc.)
-            # Scrapy will follow this link only for the first occurence of the match id so we avoid duplicates
+
+            # Yield the data and follow each match link to get additional info (player stats, etc.)
             yield match
-            yield response.follow(
-                url = "/statsguru/rugby/match/{}.html".format(match["match_id"]),
-                callback = self.match_page_parse,
-                meta = { "match" : match }
-            )
+            if response.meta["home_or_away"] == 1:
+                # Only ollow the match link for home matchs (to avoid duplicates)
+                yield response.follow(
+                    url = "/statsguru/rugby/match/{}.html".format(match["match_id"]),
+                    callback = self.match_page_parse,
+                    meta = { "match" : match }
+                )
 
             ###
             # 2) Extract basic match stats for each team into the MatchStats structure
@@ -171,7 +172,7 @@ class MainSpider(BaseSpider):
 
         # Get next page link and follow it if there is still data to process
         if self.follow_pages:
-            if links:
+            if links: # If the current page is not blank, assume that there is still data to scrape in the following page
                 page = response.meta["page"] + 1
                 for i in [1, 2]: # Get home matches then away matches
                     yield Request(
@@ -181,8 +182,8 @@ class MainSpider(BaseSpider):
 
 
     def player_info_parse(self, response):
-        """player page parser that gets the info on a specific player
-        it returns the information in the format : {...}
+        """ Callback that handles the parsing of the player info page (followed by the match iframe callback)
+        Returns a populated Player() item
         """
 
         fields = {
@@ -205,18 +206,13 @@ class MainSpider(BaseSpider):
 
 
     def player_matches_parse(self, response):
-        """"""
+        """ Work in progress """
         yield response.meta["player_stats"]
 
 
     def match_page_parse(self, response):
-        """match page parser that gets all the info on the match itself, each teams statistics, each players statistcs.
-        - scoring data in the format {"match" : match_id, "team": team_id, "tries" : [player_1_id, player_2_id, ...], "cons" : [player_1_id, ...], "pen" : [palyer_1_id, ...], "drops" : [player_1_id, ...]}
-        - match scoring data format : {...}
-        - player statistics format : {"match_id" : int, "team_id" : int, "pens_attempt" : int, "drops_attempt" : int, "kicks" : int, "passes" : int, "runs" : int, "meters" : int, "def_beaten" : int, "offloads" : int, "rucks_init" : init , "rucks_won" : int , "mall_init" : int, "mall_won" : int, "turnovers" : int, "tackles_made" : int, "tackles_missed" : int, "scrums_won_on_feed" : int, "scrums_lost_on_feed" : int, "lineouts_won_on_throw" : "int, "lineouts_lost_on_throw" : int }
-        - team statistics format : {...}
-        - match events in format : {"event_type" = "event_type", "match_id" = match_id, "team_id" = home_team_id, "player_id" : player_id, "event_time" : time} with time as int in minutes
-        this parser calls multiple other parser to deal with each situation
+        """ Callback that acts as a buffer between the match links followed by the match list parser and
+        the real processing. Checks that data is available in iframe.
         """
         # Extract iframe url with match data
         iframe = response.css("#win_old::attr(src)").extract_first()
@@ -229,8 +225,8 @@ class MainSpider(BaseSpider):
             )
 
     def _get_player_id_from_name(self, name, team_dic) :
-        """method that allows to get the id of a player from his name and the dic of his team
-        should accept names as : name, initials name"""
+        """ Method that allows to get the id of a player from his name and the dic of his team
+        should accept names as : name, initials name """
         potential = []
         final = []
         name = name.upper().strip()
@@ -269,7 +265,8 @@ class MainSpider(BaseSpider):
 
 
     def _parse_match_stats(self, tab, match) :
-        """"""
+        """ Parser that handles the content of the per-team "Stats" tab.
+        Returns the statistic value for each team for each stat. Generator function"""
 
         stats = tab.css("table tr")
         if not stats:
@@ -497,7 +494,10 @@ class MainSpider(BaseSpider):
 
 
     def _match_iframe_parse(self, response):
-        """parser for the internal iframe of each match page"""
+        """ Main callback that handles the parsing of the match iframe containing most of the data.
+        Returns PlayerStats() (enriched) per player, MatchExtraStats() and PlayerExtraStats() if available.
+        Redirects to player info page.
+        """
 
         # Get the forwarded match data
         match = response.meta.get('match')
