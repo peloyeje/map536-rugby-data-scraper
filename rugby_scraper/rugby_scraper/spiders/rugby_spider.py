@@ -614,20 +614,20 @@ class MainSpider(BaseSpider):
 
                     # Do the regex matching
                     # First, split the event string to get each player separately
-                    list_of_events = regex.match("^(([\w\- ]+[\d ]*(\([\d, ]+\))*),?)+", event_data)
+                    list_of_events = regex.split("\,(?! \d)", event_data)
                     if not list_of_events:
                         self.logger.warning("[{}] ({}) Can't extract player actions. Skipping.".format(match["match_id"], event_type))
                         self.logger.debug("String : {}".format(event_data))
                         continue
 
                     # Cleaning of trailing spaces
-                    list_of_events = [item.strip() for item in list_of_events.captures(2)]
+                    list_of_events = [item.strip() for item in list_of_events]
                     self.logger.debug(list_of_events)
 
                     # For each event (corresponding to one player), parse the info
                     # and yield the data structure
                     for event in list_of_events:
-                        event_parsed = regex.match("^([\w\-]+) *([\d ])*(?:\((?:(\d+)[, ]*)*\))*", event)
+                        event_parsed = regex.match("((?:[\w\-\' ](?!\d))+) *([\d])*(?:\((?:(\d+)[, ]*)*\))*", event)
                         if not event_parsed:
                             self.logger.warning("[{}] ({}) Action parsing failed. Skipping.".format(match["match_id"], event_type))
                             self.logger.debug("String : {}".format(event))
@@ -637,16 +637,18 @@ class MainSpider(BaseSpider):
                         occurences = event_parsed.captures(2)
                         times = event_parsed.captures(3)
 
-                        if len(name) == 0:
+                        if len(name) != 0:
+                            name = name[0].strip()
+                        else:
                             # Can't do anything without a name bru'
                             continue
 
                         # Attempt to guess the player id
                         try :
-                            player_id = self._get_player_id_from_name(name[0], player_dict["home" if index == 0 else "away"])
+                            player_id = self._get_player_id_from_name(name, player_dict["home" if index == 0 else "away"])
                         except RuntimeError:
                             # Drop game events that can't be associated to a player
-                            self.logger.warning("[{}] ({}) Unable to guess player id for \"{}\". Skipping.".format(match["match_id"], event_type, name[0]))
+                            self.logger.warning("[{}] ({}) Unable to guess player id for \"{}\". Skipping.".format(match["match_id"], event_type, name))
                             continue
 
                         if times:
@@ -659,7 +661,7 @@ class MainSpider(BaseSpider):
                                 loader.add_value("time", time)
                                 loader.add_value("action_type", event_type.lower())
                                 game_event = loader.load_item()
-                                self.logger.info("[{}] ({}) Event : {} ({}) at time {}\"".format(game_event["match_id"], game_event["action_type"], name[0], game_event["player_id"], game_event["time"]))
+                                self.logger.info("[{}] ({}) Event : {} ({}) at time {}\"".format(game_event["match_id"], game_event["action_type"], name, game_event["player_id"], game_event["time"]))
                                 yield game_event
 
                         player_scores[player_id][event_type.lower()] += max(len(occurences)+1, len(times))
@@ -675,7 +677,7 @@ class MainSpider(BaseSpider):
                     for stat_name, stat_value in player_score.items():
                         loader.add_value(stat_name, stat_value)
                     player_stats = loader.load_item()
-                    self.logger.info("[{}] Stats for {} ({}) : {}".format(match["match_id"], name[0], player_id, player_score))
+                    self.logger.info("[{}] Stats for {} : {}".format(match["match_id"], player_id, player_score))
                     yield player_stats
 
 
