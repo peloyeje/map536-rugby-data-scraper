@@ -539,8 +539,8 @@ class MainSpider(BaseSpider):
                 for player in players:
                     # Get basic info
                     player_loader = PlayerLoader(item = Player(), response = response, selector = player)
-                    player_loader.add_css("player_id", "a.liveLineupTextblk::attr(href)", re = "\/([0-9]+)\.")
-                    player_loader.add_css("name", "a.liveLineupTextblk::text")
+                    player_loader.add_css("player_id", "a[class^=\"liveLineupText\"]::attr(href)", re = "\/([0-9]+)\.")
+                    player_loader.add_css("name", "a[class^=\"liveLineupText\"]::text")
                     player_info = player_loader.load_item()
                     # Discard players without id
                     if not player_info:
