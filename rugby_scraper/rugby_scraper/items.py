@@ -10,7 +10,7 @@ from scrapy import Item, Field
 class Match(Item):
     """Data structure to store basic match info"""
 
-    match_id = Field()
+    id = Field()
     home_team_id = Field()
     away_team_id = Field()
     ground_id = Field()
@@ -61,13 +61,13 @@ class MatchExtraStats(Item):
 class Team(Item):
     """Data structure to store basic team info"""
 
-    team_id = Field()
+    id = Field()
     name = Field()
 
 class Player(Item):
     """Data structure to store basic player info"""
 
-    player_id = Field()
+    id = Field()
     name = Field()
     full_name = Field()
     birthday = Field()
