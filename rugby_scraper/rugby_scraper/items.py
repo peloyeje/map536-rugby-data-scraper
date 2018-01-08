@@ -35,7 +35,7 @@ class MatchExtraStats(Item):
     match_id = Field()
     team_id = Field()
     pens_attempt = Field()
-    pens_conceeded = Field()
+    pens_conceded = Field()
     drops_attempt = Field()
     kicks = Field()
     passes = Field()
@@ -109,7 +109,7 @@ class PlayerExtraStats(Item):
     tackles_missed = Field()
     lineouts_won_on_throw = Field()
     lineouts_stolen_from_opp = Field()
-    pens_conceeded = Field()
+    pens_conceded = Field()
     yellow_cards = Field()
     red_cards = Field()
 

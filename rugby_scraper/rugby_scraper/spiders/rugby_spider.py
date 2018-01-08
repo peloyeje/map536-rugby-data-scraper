@@ -314,7 +314,7 @@ class MainSpider(BaseSpider):
                     "Defenders beaten": "def_beaten",
                     "Offloads": "offloads",
                     "Turnovers conceded": "turnovers",
-                    "Penalties conceded": "pens_conceeded",
+                    "Penalties conceded": "pens_conceded",
                 }
                 if title in ["Kicks from hand", "Passes", "Runs", "Metres run with ball", "Clean breaks", "Defenders beaten", "Offloads", "Turnovers conceded", "Penalties conceded"]:
                     result[codes.get(title)][team_id] = int(value)
@@ -477,11 +477,11 @@ class MainSpider(BaseSpider):
                 player_stats["lineouts_won_on_throw"] = lineouts_won_on_throw
                 lineouts_stolen_from_opp = int(lineouts_re.captures(2)[0])
                 player_stats["lineouts_stolen_from_opp"] = lineouts_stolen_from_opp
-        #penalties conceeded
-        pens_conceeded = row.css("td:nth-child(13)::text")
-        if pens_conceeded:
-            pens_conceeded = int(pens_conceeded.extract_first())
-            player_stats["pens_conceeded"] = pens_conceeded
+        #penalties conceded
+        pens_conceded = row.css("td:nth-child(13)::text")
+        if pens_conceded:
+            pens_conceded = int(pens_conceded.extract_first())
+            player_stats["pens_conceded"] = pens_conceded
         #cards
         cards = row.css("td:nth-child(14)::text")
         if cards:
@@ -674,7 +674,6 @@ class MainSpider(BaseSpider):
                     loader.add_value("player_id", player_id)
                     loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
                     loader.add_value("match_id", match["id"])
-                    loader.add_value("player_id", player_id)
                     for stat_name, stat_value in player_score.items():
                         loader.add_value(stat_name, stat_value)
                     player_stats = loader.load_item()

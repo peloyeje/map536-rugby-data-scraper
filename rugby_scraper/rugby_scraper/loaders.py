@@ -3,7 +3,7 @@ import arrow
 import regex
 
 from scrapy.loader import ItemLoader
-from scrapy.loader.processors import TakeFirst, MapCompose
+from scrapy.loader.processors import TakeFirst, MapCompose, Compose
 
 def missing_values(entry):
     tokens = str(entry).split(" ")
@@ -31,7 +31,7 @@ class MatchLoader(ItemLoader):
 
     won_in = MapCompose(missing_values, lambda x: x == "won")
     date_in = MapCompose(missing_values, lambda x: arrow.get(x, "D MMM YYYY", locale = "en_us"))
-    date_out = MapCompose(lambda x: x.isoformat())
+    date_out = Compose(lambda x: x[0].datetime)
 
 class MatchStatsLoader(ItemLoader):
     default_input_processor = MapCompose(missing_values, int)
@@ -52,7 +52,7 @@ class PlayerLoader(ItemLoader):
 
     player_id_in = MapCompose(int)
     birthday_in = MapCompose(missing_values, lambda x: arrow.get(x, "MMMM D, YYYY", locale = "en_us"))
-    birthday_out = MapCompose(lambda x: x.isoformat())
+    birthday_out = Compose(lambda x: x[0].datetime)
     weight_in = MapCompose(missing_values, parse_weight)
     height_in = MapCompose(missing_values, parse_height)
 
