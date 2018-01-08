@@ -35,7 +35,7 @@ class MainSpider(BaseSpider):
             ("orderby", "date"),
             ("orderbyad", "reverse"),
             ("page", page),
-            ("size", 50), # Results per page
+            ("size", 200), # Results per page
             ("spanmin1", "24+Jul+1992"), # Lower bound date
             ("spanval1", "span"), # ?
             ("template", "results"),
