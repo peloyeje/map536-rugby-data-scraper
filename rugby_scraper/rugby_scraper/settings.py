@@ -14,7 +14,7 @@ BOT_NAME = 'rugby_scraper'
 SPIDER_MODULES = ['rugby_scraper.spiders']
 NEWSPIDER_MODULE = 'rugby_scraper.spiders'
 
-LOG_LEVEL = 'INFO'
+#LOG_LEVEL = 'INFO'
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'rugby_scraper (+http://www.yourdomain.com)'
 
@@ -64,9 +64,9 @@ ROBOTSTXT_OBEY = True
 
 # Configure item pipelines
 # See http://scrapy.readthedocs.org/en/latest/topics/item-pipeline.html
-#ITEM_PIPELINES = {
-#    'rugby_scraper.pipelines.RugbyScraperPipeline': 300,
-#}
+ITEM_PIPELINES = {
+   #'rugby_scraper.pipelines.RugbyScraperPipeline': 300,
+}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See http://doc.scrapy.org/en/latest/topics/autothrottle.html

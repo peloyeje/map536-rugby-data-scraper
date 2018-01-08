@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import arrow
+import regex
 
 from scrapy.loader import ItemLoader
 from scrapy.loader.processors import TakeFirst, MapCompose, Compose
@@ -11,6 +12,18 @@ def missing_values(entry):
     if any((token in banned for token in tokens)):
         return None
     return entry
+
+def parse_weight(string):
+    factor = 0.453592
+    weight = str(string).replace("lb", "").strip()
+    return int(int(weight) * factor)
+
+def parse_height(string):
+    factors = [0.3048, 0.0254]
+    matches = regex.findall("(\d+)", str(string).strip())
+    if matches and len(matches) <= 2:
+        components = [int(value) * factors[i] for i, value in enumerate(matches)]
+        return round(sum(components), 2)
 
 class MatchLoader(ItemLoader):
     default_input_processor = MapCompose(missing_values, int)
@@ -40,6 +53,9 @@ class PlayerLoader(ItemLoader):
     player_id_in = MapCompose(int)
     birthday_in = MapCompose(missing_values, lambda x: arrow.get(x, "MMMM D, YYYY", locale = "en_us"))
     birthday_out = Compose(lambda x: x[0].isoformat())
+    weight_in = MapCompose(missing_values, parse_weight)
+    height_in = MapCompose(missing_values, parse_height)
+
 
 class PlayerStatsLoader(ItemLoader):
     default_output_processor = TakeFirst()
