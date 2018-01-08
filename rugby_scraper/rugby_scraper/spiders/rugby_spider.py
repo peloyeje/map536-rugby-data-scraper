@@ -134,10 +134,31 @@ class MainSpider(BaseSpider):
             # Fetch the data
             match = loader.load_item()
 
+            ###
+            # 2) Extract basic team profiles and create Team structures
+            # Duplicates will be handled during pipeline processing
+            ###
+            abort = False
+            for team, selector in team_name_fields.items():
+                if match.get("{}_id".format(team)):
+                    loader = TeamLoader(item = Team(), response = response)
+                    loader.add_value("id", match.get("{}_id".format(team)))
+                    loader.add_css("name", "tr.data1:nth-child({}) {}".format(index - offset, selector))
+                    team = loader.load_item()
+                    if not team.get("name"):
+                        abort = True
+                        self.logger.error("[{}] No name for team {} : skipping team and match parsing.".format(match["id"], team["id"]))
+                    else:
+                        yield team
+
+            if abort:
+                # If we have raised a flag during the team parsing, it means that the match isn't properly formatted. Abort.
+                continue
+
             # Yield the data and follow each match link to get additional info (player stats, etc.)
+            # Only follow the match link for home matchs (to avoid duplicates)
             if response.meta["home_or_away"] == 1:
                 yield match
-                # Only ollow the match link for home matchs (to avoid duplicates)
                 yield response.follow(
                     url = "/statsguru/rugby/match/{}.html".format(match["id"]),
                     callback = self.match_page_parse,
@@ -145,7 +166,7 @@ class MainSpider(BaseSpider):
                 )
 
             ###
-            # 2) Extract basic match stats for each team into the MatchStats structure
+            # 3) Extract basic match stats for each team into the MatchStats structure
             ###
             # The match stats are associated to the left-side team
             loader = MatchStatsLoader(item = MatchStats(), response = response)
@@ -153,22 +174,8 @@ class MainSpider(BaseSpider):
             loader.add_value("team_id", match["home_team_id"] if response.meta["home_or_away"] == 1 else match["away_team_id"])
             for field, selector in stat_fields.items():
                 loader.add_css(field, "tr.data1:nth-child({}) {}".format(index - offset, selector))
-            # Fetch the data
-            match_stats = loader.load_item()
-
-            # Return it directly
-            yield match_stats
-
-            ###
-            # 3) Extract basic team profiles and create Team structures
-            ###
-            # Duplicates will be handled during pipeline processing
-            for team, selector in team_name_fields.items():
-                if match.get("{}_id".format(team)):
-                    loader = TeamLoader(item = Team(), response = response)
-                    loader.add_value("id", match.get("{}_id".format(team)))
-                    loader.add_css("name", "tr.data1:nth-child({}) {}".format(index - offset, selector))
-                    yield loader.load_item()
+            # Fetch the data and return it directly
+            yield loader.load_item()
 
 
         # Get next page link and follow it if there is still data to process
