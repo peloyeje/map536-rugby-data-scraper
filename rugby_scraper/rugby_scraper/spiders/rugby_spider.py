@@ -134,6 +134,12 @@ class MainSpider(BaseSpider):
             # Fetch the data
             match = loader.load_item()
 
+            if not match["id"] or not match["home_team_id"] or not match["away_team_id"]:
+                # Better safe than sorry
+                self.logger.error("Missing IDs for match. Skipping ...".format(match["id"]))
+                continue
+            self.logger.info("Found match ! ID : {}".format(match["id"]))
+
             ###
             # 2) Extract basic team profiles and create Team structures
             # Duplicates will be handled during pipeline processing
@@ -149,6 +155,7 @@ class MainSpider(BaseSpider):
                         abort = True
                         self.logger.error("[{}] No name for team {} : skipping team and match parsing.".format(match["id"], team["id"]))
                     else:
+                        self.logger.info("[{}] Found team \"{}\"! ID : {}".format(match["id"], team["name"], team["id"]))
                         yield team
 
             if abort:
