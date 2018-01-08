@@ -680,22 +680,24 @@ class MainSpider(BaseSpider):
                     yield player_stats
 
 
-        # Analysing the rest of the tabs in the match page
+        # 3) Parse the "Match stats" page which provides team-level aggregated statistics
         if "Match stats" in tabs:
             loaders = {
                 match["home_team_id"]: MatchExtraStatsLoader(item = MatchExtraStats()),
                 match["away_team_id"]: MatchExtraStatsLoader(item = MatchExtraStats())
             }
+            # For each metric, add respective values to the loader of the corresponding team
             for metric, scores in self._parse_match_stats(tabs["Match stats"], match):
                 for team_id, score in scores.items():
                     loaders[team_id].add_value(metric, score)
 
+            # Then tag the structures with some useful metadata (for the pipeline) before yielding
             for team_id, loader in loaders.items():
                 loader.add_value("match_id", match["match_id"])
                 loader.add_value("team_id", team_id)
                 yield loader.load_item()
 
-
+        # 4) If available, parse the "{team} stats" page which provides player-level statistics
         for index, tab in enumerate((tabs[title] for title in tabs.keys() if regex.search("^[a-zA-Z ]+ stats$", title))):
             for player_row in tab.css("table tr") :
                 player_stats = self._parse_player_stats(player_row, potential_team = [player_dict["home"], player_dict["away"]], potential_team_id = [match["home_team_id"], match["away_team_id"]])
