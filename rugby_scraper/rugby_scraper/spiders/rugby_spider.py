@@ -1,4 +1,3 @@
-import re
 import regex
 from urllib.parse import urljoin
 from collections import defaultdict, OrderedDict
@@ -697,7 +696,7 @@ class MainSpider(BaseSpider):
                 yield loader.load_item()
 
 
-        for index, tab in enumerate((tabs[title] for title in tabs.keys() if re.search("^[a-zA-Z ]+ stats$", title))):
+        for index, tab in enumerate((tabs[title] for title in tabs.keys() if regex.search("^[a-zA-Z ]+ stats$", title))):
             for player_row in tab.css("table tr") :
                 player_stats = self._parse_player_stats(player_row, potential_team = [player_dict["home"], player_dict["away"]], potential_team_id = [match["home_team_id"], match["away_team_id"]])
                 if player_stats:
