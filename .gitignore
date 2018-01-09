@@ -9,3 +9,4 @@ venv/
 rugby.json
 *.db
 .ipynb_checkpoints/
+*.log
