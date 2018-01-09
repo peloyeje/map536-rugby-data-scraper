@@ -6,6 +6,8 @@ from collections import defaultdict, OrderedDict
 
 from scrapy import Request
 from scrapy.spiders import Spider
+from scrapy.exceptions import CloseSpider
+
 from rugby_scraper.items import Match, MatchStats, Team, Player, PlayerStats, GameEvent, MatchExtraStats, PlayerExtraStats
 from rugby_scraper.loaders import MatchLoader, MatchStatsLoader, TeamLoader, PlayerLoader, PlayerStatsLoader, GameEventLoader, MatchExtraStatsLoader, PlayerExtraStatsLoader
 
@@ -79,6 +81,15 @@ class MainSpider(Spider):
         """ Callback that handles the parsing and processing of the match list table.
         Returns : Match() item, MatchStats() item, Team() item
         """
+
+        # Check if there is matches to parse on the page. If not, we can close the spider.
+        rows = response.css("tr.data1")
+        if len(rows) == 1:
+            msg = rows[0].css("td b::text").extract_first()
+            if msg and "No records" in msg.strip():
+                self.logger.info("No records left to parse. Closing spider ...")
+                raise CloseSpider
+
         id_fields = {
             'id': 'li:nth-child(6) > a::attr(href)',
             'left_team_id': 'li:nth-child(3) > a::attr(href)',
@@ -192,10 +203,9 @@ class MainSpider(Spider):
 
         # Get next page link and follow it if there is still data to process
         if self.follow_pages:
-            if links: # If the current page is not blank, assume that there is still data to scrape in the following page
-                page = int(response.meta["page"]) + 1
-                for request in self._generate_search_requests(page = 1):
-                    yield request
+            page = int(response.meta["page"]) + 1
+            for request in self._generate_search_requests(page = page):
+                yield request
 
     def player_info_parse(self, response):
         """ Callback that handles the parsing of the player info page (followed by the match iframe callback)
