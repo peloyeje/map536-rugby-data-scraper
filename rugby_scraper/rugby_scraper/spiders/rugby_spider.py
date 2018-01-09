@@ -139,7 +139,7 @@ class MainSpider(Spider):
             # Fetch the data
             match = loader.load_item()
 
-            if not match["id"] or not match["home_team_id"] or not match["away_team_id"]:
+            if any(k not in match.keys() for k in ["id", "home_team_id", "away_team_id"]):
                 # Better safe than sorry
                 self.logger.error("Missing IDs for match. Skipping ...".format(match["id"]))
                 continue
