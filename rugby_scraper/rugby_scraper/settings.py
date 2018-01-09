@@ -14,7 +14,7 @@ BOT_NAME = 'rugby_scraper'
 SPIDER_MODULES = ['rugby_scraper.spiders']
 NEWSPIDER_MODULE = 'rugby_scraper.spiders'
 
-#LOG_FILE = "./rugby.log"
+LOG_FILE = "./rugby.log"
 LOG_LEVEL = 'INFO'
 
 SQLITE_ABS_PATH = '/tmp/rugby_data.db' # Absolute path of the DB

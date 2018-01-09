@@ -25,16 +25,25 @@ def parse_height(string):
         components = [int(value) * factors[i] for i, value in enumerate(matches)]
         return round(sum(components), 2)
 
+def parse_date(date, loader_context):
+    try:
+        return arrow.get(x, loader_context.get("template", "D MMM YYYY"), locale = "en_us")
+    except:
+        return None
+
+def parse_stats(entry):
+    return int(regex.sub("\D", "", str(entry)))
+
 class MatchLoader(ItemLoader):
     default_input_processor = MapCompose(missing_values, int)
     default_output_processor = TakeFirst()
 
     won_in = MapCompose(missing_values, lambda x: x == "won")
-    date_in = MapCompose(missing_values, lambda x: arrow.get(x, "D MMM YYYY", locale = "en_us"))
+    date_in = MapCompose(missing_values, parse_date, template="D MMM YYYY")
     date_out = Compose(lambda x: x[0].datetime)
 
 class MatchStatsLoader(ItemLoader):
-    default_input_processor = MapCompose(missing_values, int)
+    default_input_processor = MapCompose(missing_values, parse_stats)
     default_output_processor = TakeFirst()
 
 class MatchExtraStatsLoader(ItemLoader):
@@ -51,7 +60,7 @@ class PlayerLoader(ItemLoader):
     default_output_processor = TakeFirst()
 
     player_id_in = MapCompose(int)
-    birthday_in = MapCompose(missing_values, lambda x: arrow.get(x, "MMMM D, YYYY", locale = "en_us"))
+    birthday_in = MapCompose(missing_values, parse_date, template="MMMM D, YYYY")
     birthday_out = Compose(lambda x: x[0].datetime)
     weight_in = MapCompose(missing_values, parse_weight)
     height_in = MapCompose(missing_values, parse_height)
