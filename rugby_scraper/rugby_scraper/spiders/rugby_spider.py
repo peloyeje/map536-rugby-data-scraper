@@ -5,11 +5,11 @@ from urllib.parse import urljoin
 from collections import defaultdict, OrderedDict
 
 from scrapy import Request
-from scrapy.spiders import BaseSpider
+from scrapy.spiders import Spider
 from rugby_scraper.items import Match, MatchStats, Team, Player, PlayerStats, GameEvent, MatchExtraStats, PlayerExtraStats
 from rugby_scraper.loaders import MatchLoader, MatchStatsLoader, TeamLoader, PlayerLoader, PlayerStatsLoader, GameEventLoader, MatchExtraStatsLoader, PlayerExtraStatsLoader
 
-class MainSpider(BaseSpider):
+class MainSpider(Spider):
     """main spider of the scraper that will get all the statistics from the different pages of the website http://stats.espnscrum.com"""
 
     # Scrapy params
@@ -17,7 +17,7 @@ class MainSpider(BaseSpider):
     allowed_domains = ["stats.espnscrum.com"]
 
     # Custom params
-    follow_pages = False
+    follow_pages = True
     start_domain = "http://stats.espnscrum.com/"
     search_path = "/statsguru/rugby/stats/index.html"
 
@@ -35,7 +35,7 @@ class MainSpider(BaseSpider):
             ("orderby", "date"),
             ("orderbyad", "reverse"),
             ("page", page),
-            ("size", 200), # Results per page
+            ("size", 100), # Results per page
             ("spanmin1", "24+Jul+1992"), # Lower bound date
             ("spanval1", "span"), # ?
             ("template", "results"),
@@ -57,6 +57,14 @@ class MainSpider(BaseSpider):
         query_params = self._generate_query_params(**params)
         return self._generate_url(domain = self.start_domain, path = self.search_path, query_params = query_params)
 
+    def _generate_search_requests(self, page = 1):
+        for i in [1, 2]: # Get home and away matches
+            self.logger.info("Scraping page {} - {} matches".format(page, "Home" if i == 1 else "Away"))
+            yield Request(
+                url = self._generate_search_url(page = page, home_or_away = i),
+                callback = self.match_list_parse,
+                meta = { "page": page, "home_or_away": i })
+
     def start_requests(self):
         """ Method that initializes the spider by getting the first page of the following queries :
         - all matches from all teams
@@ -64,11 +72,8 @@ class MainSpider(BaseSpider):
         - ordered by date
         - grouped by home or away
         """
-        for i in [1, 2]: # Get home matches then away matches
-            yield Request(
-                url = self._generate_search_url(page = 1, home_or_away = i),
-                callback = self.match_list_parse,
-                meta = { "home_or_away": i, "page": 1, "handle_httpstatus_list" : [301, 302, 303]})
+        for request in self._generate_search_requests(page = 1):
+            yield request
 
     def match_list_parse(self, response):
         """ Callback that handles the parsing and processing of the match list table.
@@ -188,13 +193,9 @@ class MainSpider(BaseSpider):
         # Get next page link and follow it if there is still data to process
         if self.follow_pages:
             if links: # If the current page is not blank, assume that there is still data to scrape in the following page
-                page = response.meta["page"] + 1
-                for i in [1, 2]: # Get home matches then away matches
-                    yield Request(
-                        url = self._generate_search_url(page = page, home_or_away = i),
-                        callback = self.match_list_parse,
-                        meta = { "home_or_away": i, "page": page })
-
+                page = int(response.meta["page"]) + 1
+                for request in self._generate_search_requests(page = 1):
+                    yield request
 
     def player_info_parse(self, response):
         """ Callback that handles the parsing of the player info page (followed by the match iframe callback)
