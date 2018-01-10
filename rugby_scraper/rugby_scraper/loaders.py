@@ -27,7 +27,7 @@ def parse_height(string):
 
 def parse_date(date, loader_context):
     try:
-        return arrow.get(x, loader_context.get("template", "D MMM YYYY"), locale = "en_us")
+        return arrow.get(date, loader_context.get("template", "D MMM YYYY"), locale = "en_us")
     except:
         return None
 
