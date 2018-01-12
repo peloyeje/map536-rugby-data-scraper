@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Enum, Text, SmallInteger
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Enum, Text, SmallInteger, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -36,8 +36,8 @@ class Player(Base):
     name = Column(String(80), nullable = False)
     full_name = Column(String(160), nullable = True)
     birthday = Column(DateTime, nullable = True)
-    height = Column(String(40), nullable = True)
-    weight = Column(String(40), nullable = True)
+    height = Column(Float, nullable = True)
+    weight = Column(Integer, nullable = True)
 
 class MatchStats(Base):
     __tablename__ = "matchstats"
