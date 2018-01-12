@@ -15,6 +15,7 @@ class Match(Item):
     away_team_id = Field()
     ground_id = Field()
     won = Field()
+    match_type = Field()
     date = Field()
 
 class MatchStats(Item):
@@ -25,8 +26,8 @@ class MatchStats(Item):
     scored = Field()
     conceded = Field()
     tries = Field()
-    conversions = Field()
-    penalties = Field()
+    cons = Field()
+    pens = Field()
     drops = Field()
 
 class MatchExtraStats(Item):

@@ -16,10 +16,11 @@ class MainSpider(Spider):
 
     # Scrapy params
     name = "main_spider"
-    allowed_domains = ["stats.espnscrum.com"]
+    allowed_domains = ["stats.espnscrum.com", "espn.co.uk"]
 
     # Custom params
     follow_pages = True
+    categories = [1, 3]
     start_domain = "http://stats.espnscrum.com/"
     search_path = "/statsguru/rugby/stats/index.html"
 
@@ -59,9 +60,9 @@ class MainSpider(Spider):
         query_params = self._generate_query_params(**params)
         return self._generate_url(domain = self.start_domain, path = self.search_path, query_params = query_params)
 
-    def _generate_search_requests(self, page = 1):
-        for i in [1, 2]: # Get home and away matches
-            self.logger.info("Scraping page {} - {} matches".format(page, "Home" if i == 1 else "Away"))
+    def _generate_search_requests(self, page = 1, categories=[1,3]):
+        for i in categories: # Get home and neutral matches
+            self.logger.info("Scraping page {} - {} matches".format(page, "Home" if i == 1 else "Neutral"))
             yield Request(
                 url = self._generate_search_url(page = page, home_or_away = i),
                 callback = self.match_list_parse,
@@ -74,7 +75,8 @@ class MainSpider(Spider):
         - ordered by date
         - grouped by home or away
         """
-        for request in self._generate_search_requests(page = 1):
+        # Go !
+        for request in self._generate_search_requests(page = 1, categories=self.categories):
             yield request
 
     def match_list_parse(self, response):
@@ -82,18 +84,23 @@ class MainSpider(Spider):
         Returns : Match() item, MatchStats() item, Team() item
         """
 
-        # Check if there is matches to parse on the page. If not, we can close the spider.
+        # Check if there are matches left to parse on the page.
         rows = response.css("tr.data1")
         if len(rows) == 1:
             msg = rows[0].css("td b::text").extract_first()
             if msg and "No records" in msg.strip():
-                self.logger.info("No records left to parse. Closing spider ...")
-                raise CloseSpider
+                self.logger.info("Finished scraping for category \"{}\" !".format("Home" if response.meta["home_or_away"] == 1 else "Neutral"))
+                self.categories.remove(int(response.meta["home_or_away"]))
+
+        # If we've finished the scraping for all categories, we can close the spider
+        if len(self.categories) == 0:
+            self.logger.info("All categories have been scraped ! Closing spider ...")
+            raise CloseSpider
 
         id_fields = {
             'id': 'li:nth-child(6) > a::attr(href)',
-            'left_team_id': 'li:nth-child(3) > a::attr(href)',
-            'right_team_id': 'li:nth-child(4) > a::attr(href)',
+            'home_team_id': 'li:nth-child(3) > a::attr(href)',
+            'away_team_id': 'li:nth-child(4) > a::attr(href)',
             'ground_id': 'li:nth-child(5) > a::attr(href)',
         }
 
@@ -102,109 +109,48 @@ class MainSpider(Spider):
             "date": "td:nth-child(13) b::text"
         }
 
-        stat_fields = {
-            "scored": "td:nth-child(3)::text",
-            "conceded": "td:nth-child(4)::text",
-            "tries": "td:nth-child(6)::text",
-            "conversions": "td:nth-child(7)::text",
-            "penalties": "td:nth-child(8)::text",
-            "drops": "td:nth-child(9)::text",
-        }
-
-        team_name_fields = {
-            "home_team": "td:nth-child(1) a::text",
-            "away_team": "td:nth-child(11)::text"
-        }
-
         # Variable storing the index offset between the side menu divs and the rows
         offset = None
 
         for index, links in enumerate(response.css(".engine-dd")):
             if links.css("[id^=\"engine-dd-\"]"):
-                # Skip these useless divs containing the UI
+                # Skip the UI divs
                 continue
 
             if not offset:
                 offset = index - 1
 
-            ###
             # 1) Extract the basic match info into the Match structure
-            ###
             loader = MatchLoader(item = Match(), response = response)
             # Subloader that handles the links in the side menu divs
             link_block_loader = loader.nested_css("#engine-dd{}".format(index - offset))
             for field, selector in id_fields.items():
-                if field == "left_team_id":
-                    field = "home_team_id" if response.meta["home_or_away"] == 1 else "away_team_id"
-                if field == "right_team_id":
-                    field = "home_team_id" if response.meta["home_or_away"] == 2 else "away_team_id"
                 link_block_loader.add_css(field, selector, re = "\/([0-9]+)\.")
-
             # Subloader that handles the match info in the table rows (won, date)
-            # We only have to get this info for the home team iteration, as they are mirrored for the away team
-            if response.meta["home_or_away"] == 1:
-                table_row_loader = loader.nested_css("tr.data1:nth-child({})".format(index - offset))
-                for field, selector in meta_fields.items():
-                    table_row_loader.add_css(field, selector)
-
+            table_row_loader = loader.nested_css("tr.data1:nth-child({})".format(index - offset))
+            for field, selector in meta_fields.items():
+                table_row_loader.add_css(field, selector)
+            # Computed values
+            loader.add_value("match_type", response.meta["home_or_away"])
             # Fetch the data
             match = loader.load_item()
 
-            if any(k not in match.keys() for k in ["id", "home_team_id", "away_team_id"]):
+            if any(k not in match.keys() for k in ["id", "home_team_id", "away_team_id", "match_type", "won", "date"]):
                 # Better safe than sorry
-                self.logger.error("Missing IDs for match. Skipping ...".format(match["id"]))
+                self.logger.error("Missing IDs for match. Skipping ...")
                 continue
             self.logger.info("Found match ! ID : {}".format(match["id"]))
 
-            ###
-            # 2) Extract basic team profiles and create Team structures
-            # Duplicates will be handled during pipeline processing
-            ###
-            abort = False
-            for team, selector in team_name_fields.items():
-                if match.get("{}_id".format(team)):
-                    loader = TeamLoader(item = Team(), response = response)
-                    loader.add_value("id", match.get("{}_id".format(team)))
-                    loader.add_css("name", "tr.data1:nth-child({}) {}".format(index - offset, selector))
-                    team = loader.load_item()
-                    if not team.get("name"):
-                        abort = True
-                        self.logger.error("[{}] No name for team {} : skipping team and match parsing.".format(match["id"], team["id"]))
-                    else:
-                        self.logger.info("[{}] Found team \"{}\"! ID : {}".format(match["id"], team["name"], team["id"]))
-                        yield team
-
-            if abort:
-                # If we have raised a flag during the team parsing, it means that the match isn't properly formatted. Abort.
-                continue
-
-            # Yield the data and follow each match link to get additional info (player stats, etc.)
-            # Only follow the match link for home matchs (to avoid duplicates)
-            if response.meta["home_or_away"] == 1:
-                yield match
-                yield response.follow(
-                    url = "/statsguru/rugby/match/{}.html".format(match["id"]),
-                    callback = self.match_page_parse,
-                    meta = { "match" : match }
-                )
-
-            ###
-            # 3) Extract basic match stats for each team into the MatchStats structure
-            ###
-            # The match stats are associated to the left-side team
-            loader = MatchStatsLoader(item = MatchStats(), response = response)
-            loader.add_value("match_id", match["id"])
-            loader.add_value("team_id", match["home_team_id"] if response.meta["home_or_away"] == 1 else match["away_team_id"])
-            for field, selector in stat_fields.items():
-                loader.add_css(field, "tr.data1:nth-child({}) {}".format(index - offset, selector))
-            # Fetch the data and return it directly
-            yield loader.load_item()
-
+            yield response.follow(
+                url = "/statsguru/rugby/match/{}.html".format(match["id"]),
+                callback = self.match_page_parse,
+                meta = { "match" : match }
+            )
 
         # Get next page link and follow it if there is still data to process
         if self.follow_pages:
             page = int(response.meta["page"]) + 1
-            for request in self._generate_search_requests(page = page):
+            for request in self._generate_search_requests(page = page, categories=self.categories):
                 yield request
 
     def player_info_parse(self, response):
@@ -229,11 +175,6 @@ class MainSpider(Spider):
                     if value:
                         loader.add_value(fields.get(title), value.strip())
             yield loader.load_item()
-
-
-    def player_matches_parse(self, response):
-        """ Work in progress """
-        yield response.meta["player_stats"]
 
 
     def match_page_parse(self, response):
@@ -530,7 +471,59 @@ class MainSpider(Spider):
 
         # Start the actual parsing
         self.logger.info("[{}] Start parsing match data ...".format(match["id"]))
-        # 1) Get an array of the tabs indexed by title
+
+        # 1) Parse the match headline
+        tokens = response.xpath("//td[@class=\"liveSubNavText1\"]/text()")
+        if not tokens:
+            self.logger.error("[{}] Can't extract headline. Skipping match ...".format(match["id"]))
+            return
+
+        headlines = "".join([item.rstrip().replace("\n", "") for item in tokens.extract()]).split(" - ")
+        if len(headlines) == 2:
+            match_stats = {
+                "scored": 0,
+                "conceded": 0,
+            }
+            error = False
+            for i, headline in enumerate(headlines):
+                id = match["home_team_id"] if i == 0 else match["away_team_id"]
+                name = regex.findall("([a-zA-Z ]+)", headline)
+                score = regex.findall("(\d+)(?!G)", headline)
+                if not name or not score:
+                    self.logger.error("[{}] Missing data in headline. Skipping match ...".format(match["id"], id))
+                    error = True
+                    break
+
+                # Create Team item
+                loader = TeamLoader(item = Team())
+                loader.add_value("id", id)
+                loader.add_value("name", name[0].strip())
+                team = loader.load_item()
+                yield team
+
+                # Store scores in match_stats dict
+                score = int(score[0].strip())
+                match_stats["scored" if i == 0 else "conceded"] = score
+
+            if not error:
+                yield match
+            else:
+                return
+
+            # Yield partial MatchStats item
+            for i, team_id in enumerate([match["home_team_id"], match["away_team_id"]]):
+                loader = MatchStatsLoader(item = MatchStats())
+                loader.add_value("match_id", match["id"])
+                loader.add_value("team_id", team_id)
+                loader.add_value("scored", match_stats["scored"] if i == 0 else match_stats["conceded"])
+                loader.add_value("conceded", match_stats["conceded"] if i == 0 else match_stats["scored"])
+                yield loader.load_item()
+
+        else:
+            self.logger.error("[{}] Headline can't be parsed. Skipping match ...".format(match["id"]))
+            return
+
+        # 2) Get an array of the tabs indexed by title
         tabs = response.css("#scrumContent .tabbertab")
         if not tabs:
             self.logger.error("[{}] No tabs, aborting.".format(match["id"]))
@@ -539,19 +532,19 @@ class MainSpider(Spider):
         tabs = [(tab.css("h2::text").extract_first(), tab) for tab in tabs]
         tabs = { tab[0]: tab[1] for tab in tabs if tab[0]}
 
-        # 2) Get all players in the match from the "Teams" tab. For each team line-up,
+        # 3) Get all players in the match from the "Teams" tab. For each team line-up,
         #    - extract player ids from list and creates requests to player page
         #    - extract match specific info and creates requests to player match page
 
         if "Teams" not in tabs:
             self.logger.error("[{}] No \"Teams\" tab, aborting.".format(match["id"]))
             return # We ain't gonna do nothin' bru
-        self.logger.info("[{}] Found {} tabs : {}".format(match["id"], len(tabs), ", ".join(tabs.keys())))
+        else:
+            self.logger.info("[{}] Found {} tabs : {}".format(match["id"], len(tabs), ", ".join(tabs.keys())))
 
         # Create players dict to match _parse_teams_score_data inputs
         player_dict = { "home": {}, "away": {}}
 
-        # For each team
         teams = tabs["Teams"].css("table tr:last-child .divTeams")
         if len(teams) < 2:
             # Hmm hmm ...
@@ -595,12 +588,6 @@ class MainSpider(Spider):
                     player_stats = player_stats_loader.load_item()
 
                     yield player_stats
-                    # Experimental : go to the match list of the player to retrieve match stats (pens/cons/tries/drops)
-                    # yield response.follow(
-                    #     url = "/statsguru/rugby/player/{}.html?{}".format(player_info["id"], self._generate_query_string(self.player_params)),
-                    #     callback = self.player_matches_parse,
-                    #     meta = { "player_stats": player_stats }
-                    # )
 
                     # Populate player dict for later use
                     if player_info["id"] and player_info["name"]:
@@ -619,7 +606,7 @@ class MainSpider(Spider):
             # Everything is pretty all right' man
             # For each team (home and away)
             for index in range(2):
-                player_scores = defaultdict(lambda: defaultdict(int))
+                team_scores = defaultdict(lambda: defaultdict(int))
                 for score in scores[index::2]:
                     # Extract from html
                     fields = (score.css(".liveTblTextGrn::text").extract_first(), score.css("td::text").extract_first())
@@ -662,6 +649,7 @@ class MainSpider(Spider):
                         name = event_parsed.captures(1)
                         occurences = event_parsed.captures(2)
                         times = event_parsed.captures(3)
+                        player_id = None
 
                         if len(name) != 0:
                             name = name[0].strip()
@@ -675,26 +663,28 @@ class MainSpider(Spider):
                         except RuntimeError:
                             # Drop game events that can't be associated to a player
                             self.logger.warning("[{}] ({}) Unable to guess player id for \"{}\". Skipping.".format(match["id"], event_type, name))
-                            continue
 
-                        if times:
-                            for time in times:
-                                # We have some game events to emit
-                                loader = GameEventLoader(item = GameEvent(), response = response)
-                                loader.add_value("player_id", player_id)
-                                loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
-                                loader.add_value("match_id", match["id"])
-                                loader.add_value("time", time)
-                                loader.add_value("action_type", event_type.lower())
-                                game_event = loader.load_item()
-                                self.logger.info("[{}] ({}) Event : {} ({}) at time {}\"".format(game_event["match_id"], game_event["action_type"], name, game_event["player_id"], game_event["time"]))
-                                yield game_event
+                        if player_id:
+                            if times:
+                                for time in times:
+                                    # We have some game events to emit
+                                    loader = GameEventLoader(item = GameEvent(), response = response)
+                                    loader.add_value("player_id", player_id)
+                                    loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
+                                    loader.add_value("match_id", match["id"])
+                                    loader.add_value("time", time)
+                                    loader.add_value("action_type", event_type.lower())
+                                    game_event = loader.load_item()
+                                    self.logger.info("[{}] ({}) Event : {} ({}) at time {}\"".format(game_event["match_id"], game_event["action_type"], name, game_event["player_id"], game_event["time"]))
+                                    yield game_event
 
-                        player_scores[player_id][event_type.lower()] += max(len(occurences)+1, len(times))
+                        team_scores[player_id][event_type.lower()] += max(len(occurences)+1, len(times))
 
                 # Once we've processed all the scores for a given team, we yield
                 # the corresponding data structures
-                for player_id, player_score in player_scores.items():
+                for player_id, player_score in team_scores.items():
+                    if player_id == None:
+                        continue
                     loader = PlayerStatsLoader(item = PlayerStats(), response = response)
                     loader.add_value("player_id", player_id)
                     loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
@@ -705,6 +695,20 @@ class MainSpider(Spider):
                     self.logger.info("[{}] Stats for {} : {}".format(match["id"], player_id, player_score))
                     yield player_stats
 
+                # Generate the MatchStats items
+                scores_summary = { "tries": 0, "cons": 0, "pens": 0, "drops": 0 }
+                for team_score in team_scores.values():
+                    for score_category, value in team_score.items():
+                        scores_summary[score_category] += value
+
+                loader = MatchStatsLoader(item = MatchStats())
+                loader.add_value("match_id", match["id"])
+                loader.add_value("team_id", match["home_team_id"] if index == 0 else match["away_team_id"])
+                loader.add_value("scored", match_stats["scored"] if index == 0 else match_stats["conceded"])
+                loader.add_value("conceded", match_stats["conceded"] if index == 0 else match_stats["scored"])
+                for score_category, value in scores_summary.items():
+                    loader.add_value(score_category, value)
+                yield loader.load_item()
 
         # 3) Parse the "Match stats" page which provides team-level aggregated statistics
         if "Match stats" in tabs:

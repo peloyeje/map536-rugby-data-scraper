@@ -7,11 +7,25 @@ from scrapy.loader.processors import TakeFirst, MapCompose, Compose
 
 def missing_values(entry):
     tokens = str(entry).split(" ")
-    banned = ["-", "unknown", "circa"]
+    banned = ["-", "unknown", "circa", "none"]
 
-    if any((token in banned for token in tokens)):
+    if any(token in banned for token in tokens):
         return None
     return entry
+
+def parse_date(date, loader_context):
+    try:
+        return arrow.get(date, loader_context.get("template", "D MMM YYYY"), locale = "en_us")
+    except Exception:
+        return None
+
+def parse_won(won, loader_context):
+    codes = loader_context.get("codes")
+    if not codes or not type(codes) is dict:
+        raise Exception("You must provide a codes dict")
+    if not won in codes.keys():
+        return None
+    return codes.get(won)
 
 def parse_weight(string):
     factor = 0.453592
@@ -24,21 +38,21 @@ def parse_height(string):
     if matches and len(matches) <= 2:
         components = [int(value) * factors[i] for i, value in enumerate(matches)]
         return round(sum(components), 2)
-
-def parse_date(date, loader_context):
-    try:
-        return arrow.get(date, loader_context.get("template", "D MMM YYYY"), locale = "en_us")
-    except:
-        return None
+    return None
 
 def parse_stats(entry):
     return int(regex.sub("\D", "", str(entry)))
 
+def parse_id(id):
+    id = int(id)
+    return id if id != 0 else None
+
 class MatchLoader(ItemLoader):
-    default_input_processor = MapCompose(missing_values, int)
+    default_input_processor = MapCompose(missing_values, parse_id)
     default_output_processor = TakeFirst()
 
-    won_in = MapCompose(missing_values, lambda x: x == "won")
+    won_in = MapCompose(missing_values, parse_won, codes={"won": 1, "lost": 2, "draw": 0})
+    type_in = MapCompose(parse_id, lambda x: 2 if x == 3 else 1)
     date_in = MapCompose(missing_values, parse_date, template="D MMM YYYY")
     date_out = Compose(lambda x: x[0].datetime)
 

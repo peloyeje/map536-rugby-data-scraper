@@ -37,7 +37,7 @@ class RugbyScraperPipeline(object):
             elif isinstance(item, items.Team):
                 self._unique_insert(session, models.Team, item)
             elif isinstance(item, items.MatchStats):
-                self._generic_insert(session, models.MatchStats, item)
+                self._insert_or_update(session, models.MatchStats, item, match_id=item["match_id"], team_id=item["team_id"])
             elif isinstance(item, items.MatchExtraStats):
                 self._generic_insert(session, models.MatchExtraStats, item)
             elif isinstance(item, items.PlayerStats):

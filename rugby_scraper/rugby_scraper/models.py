@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Enum, Text
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Enum, Text, SmallInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -23,7 +23,8 @@ class Match(Base):
     home_team_id = Column(Integer, ForeignKey("teams.id"), nullable = False)
     away_team_id = Column(Integer, ForeignKey("teams.id"), nullable = False)
     ground_id = Column(Integer, nullable = False)
-    won = Column(Boolean, nullable = False)
+    won = Column(SmallInteger, nullable = False)
+    match_type = Column(SmallInteger, nullable = False)
     date = Column(DateTime, nullable = False)
     home_team = relationship(Team, foreign_keys=home_team_id)
     away_team = relationship(Team, foreign_keys=away_team_id)
@@ -47,8 +48,8 @@ class MatchStats(Base):
     scored = Column(Integer, nullable=False)
     conceded = Column(Integer, nullable=False)
     tries = Column(Integer, nullable=True)
-    conversions = Column(Integer, nullable=True)
-    penalties = Column(Integer, nullable=True)
+    cons = Column(Integer, nullable=True)
+    pens = Column(Integer, nullable=True)
     drops = Column(Integer, nullable=True)
     match = relationship(Match)
     team = relationship(Team)
