@@ -60,13 +60,11 @@ class MainSpider(Spider):
         query_params = self._generate_query_params(**params)
         return self._generate_url(domain = self.start_domain, path = self.search_path, query_params = query_params)
 
-    def _generate_search_requests(self, page = 1, categories=[1,3]):
-        for i in categories: # Get home and neutral matches
-            self.logger.info("Scraping page {} - {} matches".format(page, "Home" if i == 1 else "Neutral"))
-            yield Request(
-                url = self._generate_search_url(page = page, home_or_away = i),
-                callback = self.match_list_parse,
-                meta = { "page": page, "home_or_away": i })
+    def _generate_search_request(self, **params):
+        return Request(
+            url = self._generate_search_url(**params),
+            callback = self.match_list_parse,
+            meta = params)
 
     def start_requests(self):
         """ Method that initializes the spider by getting the first page of the following queries :
@@ -76,8 +74,10 @@ class MainSpider(Spider):
         - grouped by home or away
         """
         # Go !
-        for request in self._generate_search_requests(page = 1, categories=self.categories):
-            yield request
+        page = 1
+        for category in self.categories:
+            self.logger.info("Scraping page {} - {} matches".format(page, "Home" if category == 1 else "Neutral"))
+            yield self._generate_search_request(page = page, home_or_away = category)
 
     def match_list_parse(self, response):
         """ Callback that handles the parsing and processing of the match list table.
@@ -149,9 +149,11 @@ class MainSpider(Spider):
 
         # Get next page link and follow it if there is still data to process
         if self.follow_pages:
-            page = int(response.meta["page"]) + 1
-            for request in self._generate_search_requests(page = page, categories=self.categories):
-                yield request
+            category = int(response.meta["home_or_away"])
+            if category in self.categories:
+                page = int(response.meta["page"]) + 1
+                self.logger.info("Scraping page {} - {} matches".format(page, "Home" if category == 1 else "Neutral"))
+                yield self._generate_search_request(page = page, home_or_away=category)
 
     def player_info_parse(self, response):
         """ Callback that handles the parsing of the player info page (followed by the match iframe callback)
