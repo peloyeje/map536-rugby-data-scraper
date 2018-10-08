@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Scrapy settings for rugby_scraper project
+# Scrapy settings for rugby project
 #
 # For simplicity, this file contains only settings considered important or
 # commonly used. You can find more settings consulting the documentation:
@@ -9,17 +9,16 @@
 #     http://scrapy.readthedocs.org/en/latest/topics/downloader-middleware.html
 #     http://scrapy.readthedocs.org/en/latest/topics/spider-middleware.html
 
-BOT_NAME = 'rugby_scraper'
+BOT_NAME = 'rugby'
 
-SPIDER_MODULES = ['rugby_scraper.spiders']
-NEWSPIDER_MODULE = 'rugby_scraper.spiders'
+SPIDER_MODULES = ['rugby.spiders']
+NEWSPIDER_MODULE = 'rugby.spiders'
 
 LOG_FILE = "./rugby.log"
 LOG_LEVEL = 'INFO'
 
 SQLITE_ABS_PATH = '/tmp/rugby_data.db' # Absolute path of the DB
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
-#USER_AGENT = 'rugby_scraper (+http://www.yourdomain.com)'
 
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = True
@@ -50,13 +49,13 @@ ROBOTSTXT_OBEY = True
 # Enable or disable spider middlewares
 # See http://scrapy.readthedocs.org/en/latest/topics/spider-middleware.html
 #SPIDER_MIDDLEWARES = {
-#    'rugby_scraper.middlewares.RugbyScraperSpiderMiddleware': 543,
+#    'rugby.middlewares.RugbyScraperSpiderMiddleware': 543,
 #}
 
 # Enable or disable downloader middlewares
 # See http://scrapy.readthedocs.org/en/latest/topics/downloader-middleware.html
 #DOWNLOADER_MIDDLEWARES = {
-#    'rugby_scraper.middlewares.MyCustomDownloaderMiddleware': 543,
+#    'rugby.middlewares.MyCustomDownloaderMiddleware': 543,
 #}
 
 # Enable or disable extensions
@@ -68,7 +67,7 @@ ROBOTSTXT_OBEY = True
 # Configure item pipelines
 # See http://scrapy.readthedocs.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-   'rugby_scraper.pipelines.RugbyScraperPipeline': 300,
+   'rugby.pipelines.RugbyScraperPipeline': 300,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)

@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine.url import URL
 
-from rugby_scraper import models, items, settings
+from rugby import models, items, settings
 
 class RugbyScraperPipeline(object):
     def __init__(self):

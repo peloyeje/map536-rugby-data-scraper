@@ -8,14 +8,14 @@ from scrapy import Request
 from scrapy.spiders import Spider
 from scrapy.exceptions import CloseSpider
 
-from rugby_scraper.items import Match, MatchStats, Team, Player, PlayerStats, GameEvent, MatchExtraStats, PlayerExtraStats
-from rugby_scraper.loaders import MatchLoader, MatchStatsLoader, TeamLoader, PlayerLoader, PlayerStatsLoader, GameEventLoader, MatchExtraStatsLoader, PlayerExtraStatsLoader
+from rugby.items import Match, MatchStats, Team, Player, PlayerStats, GameEvent, MatchExtraStats, PlayerExtraStats
+from rugby.loaders import MatchLoader, MatchStatsLoader, TeamLoader, PlayerLoader, PlayerStatsLoader, GameEventLoader, MatchExtraStatsLoader, PlayerExtraStatsLoader
 
-class MainSpider(Spider):
-    """main spider of the scraper that will get all the statistics from the different pages of the website http://stats.espnscrum.com"""
+class ESPN(Spider):
+    """Main spider of the scraper, targeting http://stats.espnscrum.com"""
 
     # Scrapy params
-    name = "main_spider"
+    name = "espn"
     allowed_domains = ["stats.espnscrum.com", "espn.co.uk"]
 
     # Custom params
